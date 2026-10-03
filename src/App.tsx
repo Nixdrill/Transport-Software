@@ -396,7 +396,7 @@ export default function App() {
   ).filter(Boolean);
 
   return (
-    <div className={`min-h-screen ${currentTheme.bgClass} flex flex-col font-sans antialiased transition-colors duration-300 selection:bg-indigo-600 selection:text-white`}>
+    <div className={`min-h-screen ${currentTheme.bgClass} flex flex-col font-sans antialiased transition-colors duration-300 selection:bg-[#00E676] selection:text-slate-950`}>
       {/* Header with Connectivity, Sync, & User Authentication */}
       <Header
         activeTab={activeTab}
@@ -426,27 +426,27 @@ export default function App() {
         {/* Floating Notification Banner */}
         {notification && (
           <div
-            className={`mb-4 px-4 py-3 rounded-xl border flex items-center justify-between shadow-lg text-xs sm:text-sm animate-in fade-in slide-in-from-top-2 duration-200 ${
+            className={`mb-4 px-4 py-3 rounded-xl border flex items-center justify-between shadow-xs text-xs sm:text-sm animate-in fade-in slide-in-from-top-2 duration-200 ${
               notification.type === 'success'
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-bold'
                 : notification.type === 'error'
-                ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300'
+                ? 'bg-rose-50 border-rose-300 text-rose-950 font-bold'
+                : 'bg-sky-50 border-sky-300 text-sky-950 font-bold'
             }`}
           >
             <div className="flex items-center space-x-2">
               {notification.type === 'success' ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                <CheckCircle2 className="h-4 w-4 text-emerald-700 flex-shrink-0" />
               ) : notification.type === 'error' ? (
-                <AlertCircle className="h-4 w-4 text-rose-400 flex-shrink-0" />
+                <AlertCircle className="h-4 w-4 text-rose-700 flex-shrink-0" />
               ) : (
-                <RefreshCw className="h-4 w-4 text-indigo-400 flex-shrink-0" />
+                <RefreshCw className="h-4 w-4 text-sky-700 flex-shrink-0" />
               )}
               <span>{notification.message}</span>
             </div>
             <button
               onClick={() => setNotification(null)}
-              className="p-1 hover:opacity-70 text-slate-400"
+              className="p-1 hover:opacity-70 text-slate-500"
             >
               <X className="h-3.5 w-3.5" />
             </button>

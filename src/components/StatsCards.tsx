@@ -1,7 +1,7 @@
 import React from 'react';
 import { DispatchRecord } from '../types/dispatch';
 import { formatCurrency } from '../lib/calculations';
-import { Truck, Receipt, Scale, IndianRupee, ShieldCheck } from 'lucide-react';
+import { Truck, Scale, IndianRupee, ShieldCheck } from 'lucide-react';
 
 interface StatsCardsProps {
   records: DispatchRecord[];
@@ -23,112 +23,112 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
-      {/* Total Freight Card */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-slate-700 transition-all">
-        <div className="flex items-center justify-between text-slate-400 mb-2">
-          <span className="text-xs font-medium tracking-wide uppercase">Total Freight</span>
-          <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
-            <IndianRupee className="h-4 w-4" />
+      {/* 1. Total Freight Card */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs relative overflow-hidden group hover:border-slate-300 transition-all">
+        <div className="flex items-center justify-between text-slate-500 mb-2">
+          <span className="text-xs font-bold tracking-wider uppercase">Total Freight</span>
+          <div className="h-8 w-8 rounded-xl bg-[#00E676] text-slate-950 font-black flex items-center justify-center shadow-xs">
+            <IndianRupee className="h-4 w-4 stroke-[2.5]" />
           </div>
         </div>
-        <div className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+        <div className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight font-mono">
           {formatCurrency(totalFreight)}
         </div>
-        <div className="mt-1 text-[11px] text-slate-400 flex items-center space-x-1">
-          <span className="text-emerald-400 font-semibold">{totalLrs}</span>
-          <span>total LRs processed</span>
+        <div className="mt-1.5 text-xs text-slate-600 font-medium flex items-center space-x-1">
+          <span className="text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded text-[11px] font-mono">
+            {totalLrs} LRs
+          </span>
+          <span>processed to date</span>
         </div>
-        <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
       </div>
 
-      {/* Total Dispatches Card */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-slate-700 transition-all">
-        <div className="flex items-center justify-between text-slate-400 mb-2">
-          <span className="text-xs font-medium tracking-wide uppercase">Total Dispatches</span>
-          <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
-            <Truck className="h-4 w-4" />
+      {/* 2. Total Dispatches Card */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs relative overflow-hidden group hover:border-slate-300 transition-all">
+        <div className="flex items-center justify-between text-slate-500 mb-2">
+          <span className="text-xs font-bold tracking-wider uppercase">Total Dispatches</span>
+          <div className="h-8 w-8 rounded-xl bg-[#00D2FF] text-slate-950 font-black flex items-center justify-center shadow-xs">
+            <Truck className="h-4 w-4 stroke-[2.5]" />
           </div>
         </div>
-        <div className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+        <div className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight font-mono">
           {totalDispatches}
         </div>
-        <div className="mt-1 text-[11px] text-slate-400 flex items-center space-x-1.5">
-          <span className="text-indigo-400 font-semibold">{records.filter((r) => r.status === 'In Transit').length}</span>
-          <span>active in transit</span>
-        </div>
-        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
-      </div>
-
-      {/* Total Weight Card */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-slate-700 transition-all">
-        <div className="flex items-center justify-between text-slate-400 mb-2">
-          <span className="text-xs font-medium tracking-wide uppercase">Cargo Weight</span>
-          <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
-            <Scale className="h-4 w-4" />
-          </div>
-        </div>
-        <div className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-          {totalWeight.toFixed(2)}{' '}
-          <span className="text-xs font-normal text-slate-400">MT</span>
-        </div>
-        <div className="mt-1 text-[11px] text-slate-400 flex items-center space-x-1">
-          <span>Avg</span>
-          <span className="text-amber-400 font-medium">
-            {totalDispatches > 0 ? (totalWeight / totalDispatches).toFixed(1) : 0} MT
+        <div className="mt-1.5 text-xs text-slate-600 font-medium flex items-center space-x-1.5">
+          <span className="text-cyan-800 font-bold bg-cyan-100 px-1.5 py-0.5 rounded text-[11px] font-mono">
+            {records.filter((r) => r.status === 'In Transit').length} Active
           </span>
-          <span>/ vehicle</span>
+          <span>in transit on road</span>
         </div>
-        <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
       </div>
 
-      {/* Fleet Placement Ratio */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-slate-700 transition-all">
-        <div className="flex items-center justify-between text-slate-400 mb-2">
-          <span className="text-xs font-medium tracking-wide uppercase">Placement</span>
-          <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
-            <ShieldCheck className="h-4 w-4" />
+      {/* 3. Total Weight Card */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs relative overflow-hidden group hover:border-slate-300 transition-all">
+        <div className="flex items-center justify-between text-slate-500 mb-2">
+          <span className="text-xs font-bold tracking-wider uppercase">Cargo Weight</span>
+          <div className="h-8 w-8 rounded-xl bg-[#FFB700] text-slate-950 font-black flex items-center justify-center shadow-xs">
+            <Scale className="h-4 w-4 stroke-[2.5]" />
           </div>
         </div>
-        <div className="flex items-baseline space-x-2">
-          <span className="text-xl sm:text-2xl font-bold text-white">
+        <div className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight font-mono">
+          {totalWeight.toFixed(2)}{' '}
+          <span className="text-xs font-bold text-slate-500">MT</span>
+        </div>
+        <div className="mt-1.5 text-xs text-slate-600 font-medium flex items-center space-x-1">
+          <span className="text-amber-800 font-bold bg-amber-100 px-1.5 py-0.5 rounded text-[11px] font-mono">
+            {totalDispatches > 0 ? (totalWeight / totalDispatches).toFixed(1) : 0} MT/trip
+          </span>
+          <span>average load</span>
+        </div>
+      </div>
+
+      {/* 4. Fleet Placement Ratio */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs relative overflow-hidden group hover:border-slate-300 transition-all">
+        <div className="flex items-center justify-between text-slate-500 mb-2">
+          <span className="text-xs font-bold tracking-wider uppercase">Placement</span>
+          <div className="h-8 w-8 rounded-xl bg-[#9333EA] text-white font-bold flex items-center justify-center shadow-xs">
+            <ShieldCheck className="h-4 w-4 stroke-[2.5]" />
+          </div>
+        </div>
+        <div className="flex items-baseline space-x-2 font-mono">
+          <span className="text-xl sm:text-2xl font-black text-slate-950">
             {marketCount}
           </span>
-          <span className="text-xs text-slate-400">Market</span>
-          <span className="text-slate-600">/</span>
-          <span className="text-xl sm:text-2xl font-bold text-indigo-400">
+          <span className="text-xs font-bold text-amber-700">Mkt</span>
+          <span className="text-slate-300">/</span>
+          <span className="text-xl sm:text-2xl font-black text-[#0096C7]">
             {ownCount}
           </span>
-          <span className="text-xs text-slate-400">Own</span>
+          <span className="text-xs font-bold text-[#0096C7]">Own</span>
         </div>
-        <div className="mt-1 flex items-center space-x-2 text-[11px]">
+        <div className="mt-1.5 flex items-center space-x-2 text-[11px]">
           {onFilterPlacement && (
-            <div className="flex space-x-1">
+            <div className="flex space-x-1 w-full bg-slate-100 p-0.5 rounded-lg border border-slate-200">
               <button
                 onClick={() => onFilterPlacement('All')}
-                className={`px-1.5 py-0.5 rounded text-[10px] ${
+                className={`flex-1 py-1 rounded text-[10px] font-bold transition-all ${
                   activePlacementFilter === 'All'
-                    ? 'bg-indigo-600 text-white font-bold'
-                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 All
               </button>
               <button
                 onClick={() => onFilterPlacement('Market')}
-                className={`px-1.5 py-0.5 rounded text-[10px] ${
+                className={`flex-1 py-1 rounded text-[10px] font-bold transition-all ${
                   activePlacementFilter === 'Market'
-                    ? 'bg-indigo-600 text-white font-bold'
-                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                    ? 'bg-[#FFB700] text-slate-950 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Market ({marketCount})
+                Mkt ({marketCount})
               </button>
               <button
                 onClick={() => onFilterPlacement('Own')}
-                className={`px-1.5 py-0.5 rounded text-[10px] ${
+                className={`flex-1 py-1 rounded text-[10px] font-bold transition-all ${
                   activePlacementFilter === 'Own'
-                    ? 'bg-indigo-600 text-white font-bold'
-                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                    ? 'bg-[#00D2FF] text-slate-950 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 Own ({ownCount})
@@ -136,7 +136,6 @@ export const StatsCards: React.FC<StatsCardsProps> = ({
             </div>
           )}
         </div>
-        <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-2xl pointer-events-none" />
       </div>
     </div>
   );

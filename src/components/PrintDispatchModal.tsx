@@ -19,27 +19,29 @@ export const PrintDispatchModal: React.FC<PrintDispatchModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-700 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden my-8 max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="bg-white border border-slate-300 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden my-8 max-h-[90vh] flex flex-col">
         {/* Modal Action Header (hidden on print) */}
-        <div className="px-6 py-4 bg-slate-800 border-b border-slate-700 flex items-center justify-between print:hidden">
+        <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between print:hidden">
           <div className="flex items-center space-x-2">
-            <Printer className="h-5 w-5 text-indigo-400" />
-            <h3 className="text-base font-bold text-white">
+            <span className="p-1 rounded-lg bg-emerald-100 text-emerald-800">
+              <Printer className="h-5 w-5" />
+            </span>
+            <h3 className="text-base font-black text-slate-950">
               Print Consignment & Lorry Receipt (LR) Slip
             </h3>
           </div>
           <div className="flex items-center space-x-2">
             <button
               onClick={handlePrint}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center space-x-1.5 shadow-md"
+              className="px-4 py-2 bg-[#00E676] hover:bg-[#00c864] text-slate-950 rounded-xl text-xs font-black flex items-center space-x-1.5 shadow-xs border border-emerald-400 transition-all"
             >
               <Printer className="h-4 w-4" />
               <span>Print / Save PDF</span>
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-700"
+              className="p-2 text-slate-400 hover:text-slate-800 rounded-xl hover:bg-slate-100 transition-colors"
             >
               <X className="h-5 w-5" />
             </button>

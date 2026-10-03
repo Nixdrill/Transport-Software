@@ -336,7 +336,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
   return (
     <div className="space-y-4">
       {/* 1. PRIMARY SEARCH & FILTER BAR */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           {/* Universal Keyword Search Input */}
           <div className="relative flex-1">
@@ -346,12 +346,12 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
               placeholder="Search keyword: LR #, party, transporter, vehicle, invoice #, e-waybill..."
               value={keywordQuery}
               onChange={(e) => setKeywordQuery(e.target.value)}
-              className="w-full pl-10 pr-9 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner"
+              className="w-full pl-10 pr-9 py-2.5 bg-[#F8FAFC] border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#00E676] focus:border-[#00E676] shadow-inner font-medium"
             />
             {keywordQuery && (
               <button
                 onClick={() => setKeywordQuery('')}
-                className="absolute right-3 top-3 text-slate-400 hover:text-white"
+                className="absolute right-3 top-3 text-slate-400 hover:text-slate-800"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -359,17 +359,21 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
           </div>
 
           {/* Quick Controls & Toggle Advanced Filters */}
-          <div className="flex items-center gap-2 justify-between md:justify-end">
+          <div className="flex items-center gap-2 justify-between md:justify-end flex-wrap">
             {/* Placement Quick Switcher */}
-            <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700 text-xs">
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
               {(['All', 'Market', 'Own'] as const).map((p) => (
                 <button
                   key={p}
                   onClick={() => setPlacementFilter(p)}
-                  className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
+                  className={`px-3 py-1.5 rounded-lg font-black transition-all ${
                     placementFilter === p
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white'
+                      ? p === 'Market'
+                        ? 'bg-[#FFB700] text-slate-950 shadow-xs'
+                        : p === 'Own'
+                        ? 'bg-[#00D2FF] text-slate-950 shadow-xs'
+                        : 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-950'
                   }`}
                 >
                   {p}
@@ -380,28 +384,28 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
             {/* Toggle Filter Drawer Button */}
             <button
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center space-x-1.5 border transition-all ${
+              className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 border transition-all ${
                 showAdvancedFilters || hasActiveFilters
-                  ? 'bg-indigo-600/20 border-indigo-500/40 text-indigo-300'
-                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'
+                  ? 'bg-emerald-50 border-emerald-400 text-emerald-900 shadow-xs'
+                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
               }`}
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
               <span>Filters</span>
               {hasActiveFilters && (
-                <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                <span className="h-2 w-2 rounded-full bg-[#00E676] animate-pulse" />
               )}
             </button>
 
             {/* Excel (.xlsx) Operations Suite */}
-            <div className="flex items-center space-x-1 bg-slate-800/90 p-1 rounded-xl border border-slate-700">
+            <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
               {/* Import Excel */}
               <button
                 onClick={() => setIsExcelImportOpen(true)}
                 title="Import dispatches and multiple LRs from Excel (.xlsx) - with duplicate protection"
-                className="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center space-x-1.5 transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-[#00E676] hover:bg-[#00c864] text-slate-950 border border-emerald-400 text-xs font-black flex items-center space-x-1.5 shadow-xs transition-colors"
               >
-                <Upload className="h-3.5 w-3.5 text-emerald-400" />
+                <Upload className="h-3.5 w-3.5 text-slate-950" />
                 <span>Import .xlsx</span>
               </button>
 
@@ -410,9 +414,9 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                 onClick={() => exportToExcel(filteredRecords)}
                 disabled={filteredRecords.length === 0}
                 title="Export filtered dispatches and nested LRs to Excel workbook (.xlsx)"
-                className="px-2.5 py-1.5 rounded-lg bg-slate-700/80 hover:bg-slate-700 text-white text-xs font-semibold flex items-center space-x-1.5 disabled:opacity-40 transition-colors"
+                className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-900 text-xs font-bold flex items-center space-x-1.5 border border-slate-200 disabled:opacity-40 transition-colors shadow-xs"
               >
-                <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400" />
+                <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
                 <span className="hidden sm:inline">Export</span>
                 <span>.xlsx</span>
               </button>
@@ -421,7 +425,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
               <button
                 onClick={downloadExcelTemplate}
                 title="Download formatted Excel Import Template (.xlsx)"
-                className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors"
               >
                 <Download className="h-3.5 w-3.5" />
               </button>
@@ -431,9 +435,9 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
             <button
               onClick={handleExportCSV}
               title="Export filtered records to CSV"
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold hidden md:flex items-center space-x-1"
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-200 text-xs font-bold hidden md:flex items-center space-x-1"
             >
-              <FileSpreadsheet className="h-3.5 w-3.5 text-slate-400" />
+              <FileSpreadsheet className="h-3.5 w-3.5 text-slate-500" />
               <span>CSV</span>
             </button>
           </div>
@@ -441,12 +445,12 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
 
         {/* 2. ADVANCED FILTERS DRAWER (Date, LR Number, From Party, To Party) */}
         {showAdvancedFilters && (
-          <div className="pt-3 border-t border-slate-800/80 space-y-4 animate-in fade-in duration-150">
+          <div className="pt-3 border-t border-slate-200 space-y-4 animate-in fade-in duration-150">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
               {/* Field 1: LR Number Filter */}
               <div>
-                <label className="block text-slate-300 font-semibold mb-1 flex items-center space-x-1">
-                  <Hash className="h-3.5 w-3.5 text-indigo-400" />
+                <label className="block text-slate-700 font-bold mb-1 flex items-center space-x-1">
+                  <Hash className="h-3.5 w-3.5 text-indigo-600" />
                   <span>Filter by LR Number</span>
                 </label>
                 <div className="relative">
@@ -455,12 +459,12 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                     placeholder="e.g. LR-MH-8901"
                     value={filterLrNumber}
                     onChange={(e) => setFilterLrNumber(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white placeholder-slate-500 uppercase font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 uppercase font-mono font-bold focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#00E676]"
                   />
                   {filterLrNumber && (
                     <button
                       onClick={() => setFilterLrNumber('')}
-                      className="absolute right-2.5 top-2 text-slate-400 hover:text-white"
+                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-800"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -470,14 +474,14 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
 
               {/* Field 2: From Party Filter */}
               <div>
-                <label className="block text-slate-300 font-semibold mb-1 flex items-center space-x-1">
-                  <Building2 className="h-3.5 w-3.5 text-amber-400" />
+                <label className="block text-slate-700 font-bold mb-1 flex items-center space-x-1">
+                  <Building2 className="h-3.5 w-3.5 text-amber-600" />
                   <span>From Party (Origin)</span>
                 </label>
                 <select
                   value={filterFromParty}
                   onChange={(e) => setFilterFromParty(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-slate-300 rounded-lg text-slate-900 font-medium focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#00E676] cursor-pointer"
                 >
                   <option value="">All From Parties</option>
                   {distinctFromParties.map((party) => (
@@ -490,14 +494,14 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
 
               {/* Field 3: To Party Filter */}
               <div>
-                <label className="block text-slate-300 font-semibold mb-1 flex items-center space-x-1">
-                  <Building2 className="h-3.5 w-3.5 text-emerald-400" />
+                <label className="block text-slate-700 font-bold mb-1 flex items-center space-x-1">
+                  <Building2 className="h-3.5 w-3.5 text-emerald-600" />
                   <span>To Party (Destination)</span>
                 </label>
                 <select
                   value={filterToParty}
                   onChange={(e) => setFilterToParty(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-slate-300 rounded-lg text-slate-900 font-medium focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#00E676] cursor-pointer"
                 >
                   <option value="">All To Parties</option>
                   {distinctToParties.map((party) => (
@@ -510,14 +514,14 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
 
               {/* Field 4: Transporter Filter */}
               <div>
-                <label className="block text-slate-300 font-semibold mb-1 flex items-center space-x-1">
-                  <Truck className="h-3.5 w-3.5 text-purple-400" />
+                <label className="block text-slate-700 font-bold mb-1 flex items-center space-x-1">
+                  <Truck className="h-3.5 w-3.5 text-purple-600" />
                   <span>Transporter / Fleet</span>
                 </label>
                 <select
                   value={filterTransporter}
                   onChange={(e) => setFilterTransporter(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-slate-300 rounded-lg text-slate-900 font-medium focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#00E676] cursor-pointer"
                 >
                   <option value="">All Transporters</option>
                   {distinctTransporters.map((t) => (
@@ -530,10 +534,10 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
             </div>
 
             {/* Date Filters: Range or Exact Date + Quick Presets */}
-            <div className="bg-slate-950/70 p-3 rounded-xl border border-slate-800 space-y-2">
+            <div className="bg-[#F8FAFC] p-3 rounded-xl border border-slate-200 space-y-2">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-slate-300 flex items-center space-x-1">
-                  <Calendar className="h-3.5 w-3.5 text-indigo-400" />
+                <span className="text-xs font-bold text-slate-800 flex items-center space-x-1">
+                  <Calendar className="h-3.5 w-3.5 text-indigo-600" />
                   <span>Date Filters & Ranges:</span>
                 </span>
 
@@ -541,26 +545,26 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                 <div className="flex space-x-1">
                   <button
                     onClick={() => handleDatePreset('today')}
-                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 font-medium"
+                    className="px-2 py-0.5 rounded bg-white border border-slate-300 hover:bg-slate-100 text-[11px] text-slate-700 font-semibold"
                   >
                     Today
                   </button>
                   <button
                     onClick={() => handleDatePreset('7days')}
-                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 font-medium"
+                    className="px-2 py-0.5 rounded bg-white border border-slate-300 hover:bg-slate-100 text-[11px] text-slate-700 font-semibold"
                   >
                     Last 7 Days
                   </button>
                   <button
                     onClick={() => handleDatePreset('month')}
-                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 font-medium"
+                    className="px-2 py-0.5 rounded bg-white border border-slate-300 hover:bg-slate-100 text-[11px] text-slate-700 font-semibold"
                   >
                     This Month
                   </button>
                   {(filterStartDate || filterEndDate || filterExactDate) && (
                     <button
                       onClick={() => handleDatePreset('clear')}
-                      className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 text-[11px] font-medium"
+                      className="px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-[11px] font-bold"
                     >
                       Clear Dates
                     </button>
@@ -570,7 +574,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-0.5">Exact Dispatch Date</label>
+                  <label className="block text-[11px] text-slate-600 font-semibold mb-0.5">Exact Dispatch Date</label>
                   <input
                     type="date"
                     value={filterExactDate}
@@ -581,12 +585,12 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                         setFilterEndDate('');
                       }
                     }}
-                    className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs focus:outline-none"
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 text-xs focus:outline-none focus:ring-1 focus:ring-[#00E676]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-0.5">From Date (Range Start)</label>
+                  <label className="block text-[11px] text-slate-600 font-semibold mb-0.5">From Date (Range Start)</label>
                   <input
                     type="date"
                     value={filterStartDate}
@@ -594,12 +598,12 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                       setFilterStartDate(e.target.value);
                       setFilterExactDate('');
                     }}
-                    className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs focus:outline-none"
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 text-xs focus:outline-none focus:ring-1 focus:ring-[#00E676]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-0.5">To Date (Range End)</label>
+                  <label className="block text-[11px] text-slate-600 font-semibold mb-0.5">To Date (Range End)</label>
                   <input
                     type="date"
                     value={filterEndDate}
@@ -607,7 +611,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                       setFilterEndDate(e.target.value);
                       setFilterExactDate('');
                     }}
-                    className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs focus:outline-none"
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 text-xs focus:outline-none focus:ring-1 focus:ring-[#00E676]"
                   />
                 </div>
               </div>
@@ -617,60 +621,64 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
 
         {/* 3. ACTIVE FILTER CHIPS BAR */}
         {hasActiveFilters && (
-          <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="text-slate-400 text-[11px] uppercase font-semibold">Active:</span>
+          <div className="pt-2 border-t border-slate-200 flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-slate-500 text-[11px] uppercase font-bold">Active:</span>
 
             {keywordQuery && (
-              <span className="inline-flex items-center space-x-1 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full text-[11px]">
+              <span className="inline-flex items-center space-x-1 bg-slate-100 text-slate-800 border border-slate-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
                 <span>Keyword: "{keywordQuery}"</span>
-                <button onClick={() => setKeywordQuery('')}><X className="h-3 w-3" /></button>
+                <button onClick={() => setKeywordQuery('')}><X className="h-3 w-3 text-slate-500 hover:text-slate-900" /></button>
               </span>
             )}
 
             {filterLrNumber && (
-              <span className="inline-flex items-center space-x-1 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full text-[11px]">
+              <span className="inline-flex items-center space-x-1 bg-indigo-50 text-indigo-900 border border-indigo-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono">
                 <span>LR: {filterLrNumber}</span>
-                <button onClick={() => setFilterLrNumber('')}><X className="h-3 w-3" /></button>
+                <button onClick={() => setFilterLrNumber('')}><X className="h-3 w-3 text-indigo-600 hover:text-indigo-950" /></button>
               </span>
             )}
 
             {filterFromParty && (
-              <span className="inline-flex items-center space-x-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full text-[11px]">
+              <span className="inline-flex items-center space-x-1 bg-amber-50 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
                 <span>From: {filterFromParty}</span>
-                <button onClick={() => setFilterFromParty('')}><X className="h-3 w-3" /></button>
+                <button onClick={() => setFilterFromParty('')}><X className="h-3 w-3 text-amber-700 hover:text-amber-950" /></button>
               </span>
             )}
 
             {filterToParty && (
-              <span className="inline-flex items-center space-x-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full text-[11px]">
+              <span className="inline-flex items-center space-x-1 bg-emerald-50 text-emerald-900 border border-emerald-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
                 <span>To: {filterToParty}</span>
-                <button onClick={() => setFilterToParty('')}><X className="h-3 w-3" /></button>
+                <button onClick={() => setFilterToParty('')}><X className="h-3 w-3 text-emerald-700 hover:text-emerald-950" /></button>
               </span>
             )}
 
             {filterTransporter && (
-              <span className="inline-flex items-center space-x-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full text-[11px]">
+              <span className="inline-flex items-center space-x-1 bg-purple-50 text-purple-900 border border-purple-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
                 <span>Transporter: {filterTransporter}</span>
-                <button onClick={() => setFilterTransporter('')}><X className="h-3 w-3" /></button>
+                <button onClick={() => setFilterTransporter('')}><X className="h-3 w-3 text-purple-700 hover:text-purple-950" /></button>
               </span>
             )}
 
             {filterExactDate && (
-              <span className="inline-flex items-center space-x-1 bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded-full text-[11px]">
+              <span className="inline-flex items-center space-x-1 bg-sky-50 text-sky-900 border border-sky-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono">
                 <span>Date: {filterExactDate}</span>
-                <button onClick={() => setFilterExactDate('')}><X className="h-3 w-3" /></button>
+                <button onClick={() => setFilterExactDate('')}><X className="h-3 w-3 text-sky-700 hover:text-sky-950" /></button>
               </span>
             )}
 
             {(filterStartDate || filterEndDate) && (
-              <span className="inline-flex items-center space-x-1 bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded-full text-[11px]">
+              <span className="inline-flex items-center space-x-1 bg-sky-50 text-sky-900 border border-sky-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold font-mono">
                 <span>{filterStartDate || 'Start'} → {filterEndDate || 'End'}</span>
-                <button onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}><X className="h-3 w-3" /></button>
+                <button onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}><X className="h-3 w-3 text-sky-700 hover:text-sky-950" /></button>
               </span>
             )}
 
             {placementFilter !== 'All' && (
-              <span className="inline-flex items-center space-x-1 bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded-full text-[11px]">
+              <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                placementFilter === 'Market'
+                  ? 'bg-amber-100 text-amber-950 border border-amber-300'
+                  : 'bg-cyan-100 text-cyan-950 border border-cyan-300'
+              }`}>
                 <span>{placementFilter} Fleet</span>
                 <button onClick={() => setPlacementFilter('All')}><X className="h-3 w-3" /></button>
               </span>
@@ -678,7 +686,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
 
             <button
               onClick={handleClearAllFilters}
-              className="text-rose-400 hover:text-rose-300 text-[11px] underline ml-auto font-medium"
+              className="text-rose-600 hover:text-rose-800 text-[11px] underline ml-auto font-bold"
             >
               Clear All Filters
             </button>
@@ -687,19 +695,19 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
       </div>
 
       {/* Results Count & Quick Stats Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 px-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 px-1 font-medium">
         <div>
-          Showing <span className="text-white font-bold">{filteredRecords.length}</span> of{' '}
-          <span className="text-white font-semibold">{records.length}</span> dispatches
+          Showing <span className="text-slate-950 font-black">{filteredRecords.length}</span> of{' '}
+          <span className="text-slate-950 font-black">{records.length}</span> dispatches
           {hasActiveFilters && (
-            <span className="text-indigo-400 ml-1.5">(Filtered)</span>
+            <span className="text-emerald-700 font-bold ml-1.5">(Filtered)</span>
           )}
         </div>
 
         {records.length === 0 && (
           <button
             onClick={onLoadSampleData}
-            className="text-indigo-400 hover:text-indigo-300 font-medium underline flex items-center space-x-1"
+            className="text-emerald-700 hover:text-emerald-900 font-bold underline flex items-center space-x-1"
           >
             <span>Load Sample Fleet & LR Data</span>
           </button>
@@ -708,13 +716,13 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
 
       {/* 4. FILTERED RECORDS TABLE / CARDS */}
       {filteredRecords.length === 0 ? (
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-8 sm:p-12 text-center space-y-4">
-          <div className="h-14 w-14 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mx-auto border border-indigo-500/20">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-8 sm:p-12 text-center space-y-4 shadow-xs">
+          <div className="h-14 w-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-200">
             <Search className="h-7 w-7" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-white">No Matching Dispatches</h3>
-            <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+            <h3 className="text-base font-black text-slate-950">No Matching Dispatches</h3>
+            <p className="text-xs text-slate-600 max-w-md mx-auto mt-1 font-medium">
               {hasActiveFilters
                 ? 'No records match your selected filter criteria. Try broadening your date range or clearing individual filters.'
                 : 'Get started by creating your first vehicle dispatch and LR record, or load realistic sample records.'}
@@ -725,7 +733,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
             {hasActiveFilters ? (
               <button
                 onClick={handleClearAllFilters}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-md transition-all flex items-center space-x-1.5"
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-1.5"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 <span>Reset All Filters</span>
@@ -734,14 +742,14 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
               <>
                 <button
                   onClick={onNewEntry}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-md transition-all flex items-center space-x-1.5"
+                  className="px-4 py-2 bg-[#00E676] hover:bg-[#00c864] text-slate-950 text-xs font-black rounded-xl shadow-xs border border-emerald-400 transition-all flex items-center space-x-1.5"
                 >
                   <PlusCircle className="h-4 w-4" />
                   <span>Create New Dispatch</span>
                 </button>
                 <button
                   onClick={onLoadSampleData}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition-all"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-300 transition-all"
                 >
                   Load Sample Records
                 </button>
@@ -750,51 +758,51 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
           </div>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3.5">
           {filteredRecords.map((dsp) => {
             const isExpanded = expandedId === dsp.id;
 
             return (
               <div
                 key={dsp.id}
-                className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm hover:border-slate-700 transition-all"
+                className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs hover:border-slate-300 hover:shadow-sm transition-all"
               >
                 {/* Main Card Header / Summary Row */}
                 <div
-                  className="p-4 cursor-pointer select-none"
+                  className="p-4 sm:p-5 cursor-pointer select-none"
                   onClick={() => toggleExpand(dsp.id)}
                 >
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                     {/* Left: Date, Vehicle, Transporter & Route */}
                     <div className="flex items-start space-x-3">
                       <div className="mt-0.5">
-                        <div className="h-9 w-9 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20">
-                          <Truck className="h-5 w-5" />
+                        <div className="h-10 w-10 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center border border-slate-200">
+                          <Truck className="h-5 w-5 text-slate-900" />
                         </div>
                       </div>
 
                       <div>
                         {/* Vehicle Number & Placement Badge */}
                         <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                          <span className="font-mono font-bold text-sm sm:text-base text-white tracking-wide">
+                          <span className="font-mono font-black text-base sm:text-lg text-slate-950 tracking-tight">
                             {dsp.vehicleNumber}
                           </span>
                           <span
-                            className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${
+                            className={`text-[11px] px-2.5 py-0.5 rounded-md font-black uppercase tracking-wider ${
                               dsp.placement === 'Market'
-                                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                                : 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20'
+                                ? 'bg-[#FFB700] text-slate-950 border border-amber-400'
+                                : 'bg-[#00D2FF] text-slate-950 border border-cyan-400'
                             }`}
                           >
                             {dsp.placement}
                           </span>
                           <span
-                            className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                            className={`text-[10px] px-2.5 py-0.5 rounded-md font-bold uppercase ${
                               dsp.status === 'Delivered'
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                                 : dsp.status === 'In Transit'
-                                ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
-                                : 'bg-slate-800 text-slate-400'
+                                ? 'bg-sky-100 text-sky-900 border border-sky-300'
+                                : 'bg-slate-100 text-slate-700 border border-slate-200'
                             }`}
                           >
                             {dsp.status}
@@ -802,30 +810,30 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
 
                           {/* Sync Status Badge */}
                           {dsp.syncStatus === 'pending' ? (
-                            <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-medium border border-amber-500/30 flex items-center space-x-1">
-                              <Clock className="h-2.5 w-2.5" />
+                            <span className="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded font-bold border border-amber-300 flex items-center space-x-1">
+                              <Clock className="h-2.5 w-2.5 text-amber-700" />
                               <span>Offline Pending</span>
                             </span>
                           ) : (
-                            <span className="text-[10px] text-emerald-400/80 flex items-center space-x-1">
-                              <CheckCircle2 className="h-2.5 w-2.5" />
+                            <span className="text-[10px] text-emerald-700 font-bold flex items-center space-x-1">
+                              <CheckCircle2 className="h-3 w-3 text-emerald-600" />
                               <span>Cloud Synced</span>
                             </span>
                           )}
                         </div>
 
                         {/* Transporter and Route */}
-                        <div className="text-xs text-slate-300 font-medium mt-1">
-                          <span className="text-slate-400">Transporter:</span>{' '}
-                          <span className="text-white font-semibold">{dsp.transporterName}</span>
+                        <div className="text-xs text-slate-700 font-medium mt-1">
+                          <span className="text-slate-500 font-normal">Transporter:</span>{' '}
+                          <span className="text-slate-950 font-bold">{dsp.transporterName}</span>
                         </div>
 
-                        <div className="text-xs text-slate-400 flex items-center space-x-1.5 mt-0.5">
-                          <span className={filterFromParty ? 'text-amber-300 font-semibold' : ''}>
+                        <div className="text-xs text-slate-600 flex items-center space-x-1.5 mt-0.5 font-medium">
+                          <span className={filterFromParty ? 'text-amber-800 font-bold bg-amber-50 px-1 rounded' : ''}>
                             {dsp.fromParty}
                           </span>
-                          <ArrowRight className="h-3 w-3 text-slate-600" />
-                          <span className={filterToParty ? 'text-emerald-300 font-semibold' : 'text-slate-200'}>
+                          <ArrowRight className="h-3 w-3 text-slate-400" />
+                          <span className={filterToParty ? 'text-emerald-800 font-bold bg-emerald-50 px-1 rounded' : 'text-slate-800 font-semibold'}>
                             {dsp.toParty}
                           </span>
                         </div>
@@ -833,39 +841,39 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                     </div>
 
                     {/* Middle: LRs and Cargo Stats */}
-                    <div className="flex flex-wrap items-center gap-4 text-xs border-t lg:border-t-0 border-slate-800 pt-2 lg:pt-0">
+                    <div className="flex flex-wrap items-center gap-4 text-xs border-t lg:border-t-0 border-slate-100 pt-2 lg:pt-0">
                       <div>
-                        <div className="text-[10px] text-slate-500 uppercase font-semibold">
+                        <div className="text-[10px] text-slate-500 uppercase font-bold">
                           LR Count
                         </div>
-                        <div className="font-semibold text-white font-mono flex items-center space-x-1">
-                          <span>{dsp.totalLrsCount || dsp.lrs?.length || 0} LRs</span>
+                        <div className="font-black text-slate-950 font-mono text-sm">
+                          {dsp.totalLrsCount || dsp.lrs?.length || 0} LRs
                         </div>
                       </div>
 
-                      <div className="border-l border-slate-800 pl-4">
-                        <div className="text-[10px] text-slate-500 uppercase font-semibold">
+                      <div className="border-l border-slate-200 pl-4">
+                        <div className="text-[10px] text-slate-500 uppercase font-bold">
                           Weight
                         </div>
-                        <div className="font-semibold text-amber-400 font-mono">
+                        <div className="font-black text-amber-800 font-mono text-sm">
                           {dsp.totalWeight} MT
                         </div>
                       </div>
 
-                      <div className="border-l border-slate-800 pl-4">
-                        <div className="text-[10px] text-slate-500 uppercase font-semibold">
+                      <div className="border-l border-slate-200 pl-4">
+                        <div className="text-[10px] text-slate-500 uppercase font-bold">
                           Total Freight
                         </div>
-                        <div className="font-bold text-emerald-400 font-mono text-sm">
+                        <div className="font-black text-emerald-700 font-mono text-base">
                           {formatCurrency(dsp.totalFreightAmount)}
                         </div>
                       </div>
 
-                      <div className="border-l border-slate-800 pl-4 hidden sm:block">
-                        <div className="text-[10px] text-slate-500 uppercase font-semibold">
+                      <div className="border-l border-slate-200 pl-4 hidden sm:block">
+                        <div className="text-[10px] text-slate-500 uppercase font-bold">
                           Date
                         </div>
-                        <div className="text-slate-300 font-mono text-xs">
+                        <div className="text-slate-700 font-mono text-xs font-semibold">
                           {dsp.date}
                         </div>
                       </div>
@@ -880,7 +888,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                         type="button"
                         onClick={() => onPrint(dsp)}
                         title="Print Lorry Receipt Slip"
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-950 transition-colors border border-slate-200"
                       >
                         <Printer className="h-4 w-4" />
                       </button>
@@ -889,7 +897,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                         type="button"
                         onClick={() => onEdit(dsp)}
                         title="Edit Dispatch"
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-400 hover:text-indigo-300 transition-colors"
+                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-indigo-700 hover:text-indigo-950 transition-colors border border-slate-200"
                       >
                         <Edit3 className="h-4 w-4" />
                       </button>
@@ -898,7 +906,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                         type="button"
                         onClick={() => onDuplicate(dsp)}
                         title="Duplicate as new dispatch"
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-950 transition-colors border border-slate-200"
                       >
                         <Copy className="h-4 w-4" />
                       </button>
@@ -907,7 +915,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                         type="button"
                         onClick={() => onDelete(dsp.id)}
                         title="Delete Dispatch"
-                        className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-colors"
+                        className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors border border-rose-200"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -915,7 +923,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                       <button
                         type="button"
                         onClick={() => toggleExpand(dsp.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white"
+                        className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors"
                       >
                         {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                       </button>
@@ -924,8 +932,8 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
 
                   {/* LR Numbers quick pills on summary card */}
                   {dsp.lrNumbers && dsp.lrNumbers.length > 0 && (
-                    <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[10px] text-slate-500 font-semibold uppercase">
+                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase">
                         LRs:
                       </span>
                       {dsp.lrNumbers.map((lrNum) => {
@@ -933,10 +941,10 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                         return (
                           <span
                             key={lrNum}
-                            className={`text-[10px] px-2 py-0.5 rounded font-mono font-medium border ${
+                            className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold border ${
                               isMatch
-                                ? 'bg-indigo-600 text-white border-indigo-400 font-bold'
-                                : 'bg-slate-800 text-slate-300 border-slate-700/60'
+                                ? 'bg-indigo-600 text-white border-indigo-500 shadow-xs'
+                                : 'bg-slate-100 text-slate-800 border-slate-200'
                             }`}
                           >
                             {lrNum}
@@ -949,13 +957,13 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
 
                 {/* Expanded Details: Nested LRs, Invoices, E-Waybills */}
                 {isExpanded && (
-                  <div className="bg-slate-950/70 border-t border-slate-800 p-4 space-y-4">
+                  <div className="bg-[#F8FAFC] border-t border-slate-200 p-4 sm:p-5 space-y-4">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-1.5">
-                        <FileText className="h-3.5 w-3.5 text-indigo-400" />
+                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center space-x-1.5">
+                        <FileText className="h-3.5 w-3.5 text-indigo-600" />
                         <span>Attached Lorry Receipts (LR Details)</span>
                       </h4>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-slate-600 font-bold">
                         Total {dsp.lrs?.length || 0} LR Item(s)
                       </span>
                     </div>
@@ -964,53 +972,53 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                       {(dsp.lrs || []).map((lr, idx) => (
                         <div
                           key={lr.id || idx}
-                          className="bg-slate-900 border border-slate-800 rounded-lg p-3 text-xs space-y-2"
+                          className="bg-white border border-slate-200 rounded-xl p-3.5 text-xs space-y-2.5 shadow-xs"
                         >
-                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
                             <div className="flex items-center space-x-2">
-                              <span className="h-5 w-5 rounded bg-indigo-500/20 text-indigo-400 font-bold flex items-center justify-center font-mono text-[10px]">
+                              <span className="h-5 w-5 rounded bg-slate-100 text-slate-800 font-black flex items-center justify-center font-mono text-[10px]">
                                 #{idx + 1}
                               </span>
-                              <span className="font-bold text-white font-mono">
+                              <span className="font-black text-slate-950 font-mono text-sm">
                                 LR: {lr.lrNumber}
                               </span>
                               {lr.lrDate && (
-                                <span className="text-[11px] text-slate-400">
+                                <span className="text-[11px] text-slate-500 font-medium">
                                   ({lr.lrDate})
                                 </span>
                               )}
                             </div>
 
                             <div className="flex items-center space-x-3 font-mono">
-                              <span className="text-slate-300">
+                              <span className="text-slate-700 font-bold">
                                 {lr.weight} {lr.weightUnit} @ ₹{lr.rate}
                               </span>
-                              <span className="font-bold text-emerald-400 text-sm">
+                              <span className="font-black text-emerald-700 text-sm">
                                 {formatCurrency(lr.freightAmount)}
                               </span>
                             </div>
                           </div>
 
                           {/* Consignor -> Consignee Route */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-slate-300">
-                            <div className="bg-slate-800/40 p-2 rounded border border-slate-800">
-                              <span className="text-[10px] text-slate-400 uppercase font-semibold block">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-slate-700">
+                            <div className="bg-[#F8FAFC] p-2.5 rounded-lg border border-slate-200">
+                              <span className="text-[10px] text-slate-500 uppercase font-bold block">
                                 Consignor (Sender)
                               </span>
-                              <div className="font-medium text-white">{lr.consignorName}</div>
-                              <div className="text-slate-400 text-[11px] flex items-center space-x-1 mt-0.5">
-                                <MapPin className="h-3 w-3 text-indigo-400" />
+                              <div className="font-bold text-slate-950 mt-0.5">{lr.consignorName}</div>
+                              <div className="text-slate-600 text-[11px] flex items-center space-x-1 mt-0.5">
+                                <MapPin className="h-3 w-3 text-indigo-600" />
                                 <span>{lr.consignorCity}</span>
                               </div>
                             </div>
 
-                            <div className="bg-slate-800/40 p-2 rounded border border-slate-800">
-                              <span className="text-[10px] text-slate-400 uppercase font-semibold block">
+                            <div className="bg-[#F8FAFC] p-2.5 rounded-lg border border-slate-200">
+                              <span className="text-[10px] text-slate-500 uppercase font-bold block">
                                 Consignee (Receiver)
                               </span>
-                              <div className="font-medium text-white">{lr.consigneeName}</div>
-                              <div className="text-slate-400 text-[11px] flex items-center space-x-1 mt-0.5">
-                                <MapPin className="h-3 w-3 text-emerald-400" />
+                              <div className="font-bold text-slate-950 mt-0.5">{lr.consigneeName}</div>
+                              <div className="text-slate-600 text-[11px] flex items-center space-x-1 mt-0.5">
+                                <MapPin className="h-3 w-3 text-emerald-600" />
                                 <span>{lr.consigneeCity}</span>
                               </div>
                             </div>
@@ -1019,7 +1027,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                           {/* Multiple Invoices and E-Waybills Badges */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
                             <div>
-                              <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
+                              <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">
                                 Invoices ({lr.invoiceNumbers?.length || 0}):
                               </span>
                               <div className="flex flex-wrap gap-1">
@@ -1027,13 +1035,13 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                                   lr.invoiceNumbers.map((inv) => (
                                     <span
                                       key={inv}
-                                      className="bg-amber-500/10 border border-amber-500/30 text-amber-300 px-1.5 py-0.5 rounded text-[10px] font-mono"
+                                      className="bg-amber-100 border border-amber-300 text-amber-950 px-2 py-0.5 rounded text-[10px] font-mono font-bold"
                                     >
                                       {inv}
                                     </span>
                                   ))
                                 ) : (
-                                  <span className="text-slate-500 italic text-[11px]">
+                                  <span className="text-slate-400 italic text-[11px]">
                                     None entered
                                   </span>
                                 )}
@@ -1041,7 +1049,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                             </div>
 
                             <div>
-                              <span className="text-[10px] text-slate-400 uppercase font-semibold block mb-1">
+                              <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">
                                 E-waybills ({lr.ewaybillNumbers?.length || 0}):
                               </span>
                               <div className="flex flex-wrap gap-1">
@@ -1049,13 +1057,13 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                                   lr.ewaybillNumbers.map((ewb) => (
                                     <span
                                       key={ewb}
-                                      className="bg-teal-500/10 border border-teal-500/30 text-teal-300 px-1.5 py-0.5 rounded text-[10px] font-mono"
+                                      className="bg-cyan-100 border border-cyan-300 text-cyan-950 px-2 py-0.5 rounded text-[10px] font-mono font-bold"
                                     >
                                       {ewb}
                                     </span>
                                   ))
                                 ) : (
-                                  <span className="text-slate-500 italic text-[11px]">
+                                  <span className="text-slate-400 italic text-[11px]">
                                     None entered
                                   </span>
                                 )}
@@ -1065,61 +1073,61 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
 
                           {/* Charges Breakdown */}
                           {(lr.advanceAmount > 0 || lr.extraCharges > 0) && (
-                            <div className="pt-2 border-t border-slate-800/80 flex flex-wrap gap-4 text-[11px] text-slate-400">
+                            <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-4 text-[11px] text-slate-600">
                               {lr.advanceAmount > 0 && (
                                 <span>
-                                  Client Advance: <strong className="text-slate-200">{formatCurrency(lr.advanceAmount)}</strong>
+                                  Client Advance: <strong className="text-slate-900 font-bold">{formatCurrency(lr.advanceAmount)}</strong>
                                 </span>
                               )}
                               {lr.extraCharges > 0 && (
                                 <span>
-                                  Extra Charges: <strong className="text-slate-200">{formatCurrency(lr.extraCharges)}</strong>
+                                  Extra Charges: <strong className="text-slate-900 font-bold">{formatCurrency(lr.extraCharges)}</strong>
                                 </span>
                               )}
                               <span>
-                                Net Client Balance: <strong className="text-white">{formatCurrency((lr.freightAmount || 0) + (lr.extraCharges || 0) - (lr.advanceAmount || 0))}</strong>
+                                Net Client Balance: <strong className="text-slate-950 font-black">{formatCurrency((lr.freightAmount || 0) + (lr.extraCharges || 0) - (lr.advanceAmount || 0))}</strong>
                               </span>
                             </div>
                           )}
 
                           {/* MARKET VEHICLE PLACEMENT DATA SCHEME (When placement === 'Market') */}
                           {dsp.placement === 'Market' && (lr.grossMarketFreight || lr.marketWeight || lr.netMarketFreight) ? (
-                            <div className="mt-2 p-2.5 rounded-lg bg-amber-950/20 border border-amber-500/30 text-[11px] space-y-1.5">
-                              <div className="flex items-center justify-between text-amber-300 font-semibold border-b border-amber-500/20 pb-1">
+                            <div className="mt-2 p-3 rounded-xl bg-[#FFFBEB] border border-amber-300 text-[11px] space-y-1.5 shadow-xs">
+                              <div className="flex items-center justify-between text-amber-950 font-bold border-b border-amber-200 pb-1">
                                 <span className="flex items-center space-x-1">
-                                  <Truck className="h-3 w-3 text-amber-400" />
+                                  <Truck className="h-3.5 w-3.5 text-amber-700" />
                                   <span>Market Vehicle Hire Contract & Deductions</span>
                                 </span>
-                                <span className="font-mono text-xs text-amber-400 font-bold">
+                                <span className="font-mono text-xs text-amber-950 font-black bg-amber-200/80 px-2 py-0.5 rounded">
                                   Net Payable: {formatCurrency(lr.netMarketFreight || 0)}
                                 </span>
                               </div>
 
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-300 font-mono">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-800 font-mono">
                                 <div>
-                                  <span className="text-slate-500 text-[10px] block font-sans">Market Weight</span>
-                                  <span>{lr.marketWeight || lr.weight} MT</span>
+                                  <span className="text-slate-500 text-[10px] block font-sans font-semibold">Market Weight</span>
+                                  <span className="font-bold">{lr.marketWeight || lr.weight} MT</span>
                                 </div>
                                 <div>
-                                  <span className="text-slate-500 text-[10px] block font-sans">Market Rate</span>
-                                  <span>₹{lr.marketRate || 0}</span>
+                                  <span className="text-slate-500 text-[10px] block font-sans font-semibold">Market Rate</span>
+                                  <span className="font-bold">₹{lr.marketRate || 0}</span>
                                 </div>
                                 <div>
-                                  <span className="text-slate-500 text-[10px] block font-sans">Gross Market Hire</span>
-                                  <span className="text-amber-300 font-bold">{formatCurrency(lr.grossMarketFreight || 0)}</span>
+                                  <span className="text-slate-500 text-[10px] block font-sans font-semibold">Gross Market Hire</span>
+                                  <span className="text-amber-900 font-black">{formatCurrency(lr.grossMarketFreight || 0)}</span>
                                 </div>
                                 <div>
-                                  <span className="text-slate-500 text-[10px] block font-sans">Deductions (Comm + Adv)</span>
-                                  <span className="text-rose-400">
+                                  <span className="text-slate-500 text-[10px] block font-sans font-semibold">Deductions (Comm + Adv)</span>
+                                  <span className="text-rose-700 font-bold">
                                     -{formatCurrency((lr.marketCommission || 0) + (lr.marketAdvance || 0))}
                                   </span>
                                 </div>
                               </div>
 
-                              <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-amber-500/10">
+                              <div className="flex items-center justify-between text-[10px] text-slate-600 pt-1 border-t border-amber-200">
                                 <span>Commission: {formatCurrency(lr.marketCommission || 0)} | Vehicle Advance: {formatCurrency(lr.marketAdvance || 0)}</span>
                                 {lr.freightAmount > 0 && (lr.grossMarketFreight || 0) > 0 && (
-                                  <span className="text-emerald-400 font-semibold font-mono">
+                                  <span className="text-emerald-800 font-black font-mono">
                                     LR Margin: {formatCurrency(lr.freightAmount - (lr.grossMarketFreight || 0))}
                                   </span>
                                 )}
@@ -1133,14 +1141,14 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                     <div className="flex justify-end space-x-2 pt-1">
                       <button
                         onClick={() => onPrint(dsp)}
-                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded text-xs font-semibold flex items-center space-x-1"
+                        className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg text-xs font-bold flex items-center space-x-1 shadow-xs"
                       >
-                        <Printer className="h-3.5 w-3.5 text-indigo-400" />
+                        <Printer className="h-3.5 w-3.5 text-indigo-600" />
                         <span>Print Consignment Slip</span>
                       </button>
                       <button
                         onClick={() => onEdit(dsp)}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold flex items-center space-x-1"
+                        className="px-3.5 py-1.5 bg-[#00E676] hover:bg-[#00c864] text-slate-950 rounded-lg text-xs font-black shadow-xs border border-emerald-400 flex items-center space-x-1"
                       >
                         <Edit3 className="h-3.5 w-3.5" />
                         <span>Edit This Dispatch</span>

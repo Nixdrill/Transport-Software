@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { DispatchRecord, LRItem } from '../types/dispatch';
 import { formatCurrency } from '../lib/calculations';
-import { Search, Hash, FileText, Truck, ArrowRight, Printer, MapPin, Eye } from 'lucide-react';
+import { Search, Truck, Printer, MapPin, Eye } from 'lucide-react';
 
 interface LRLookupProps {
   records: DispatchRecord[];
@@ -63,32 +63,34 @@ export const LRLookupModal: React.FC<LRLookupProps> = ({
   return (
     <div className="space-y-4">
       {/* Search Header */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
         <div>
-          <h3 className="text-base font-bold text-white flex items-center space-x-2">
-            <Search className="h-5 w-5 text-amber-400" />
+          <h3 className="text-base font-black text-slate-950 flex items-center space-x-2">
+            <span className="p-1 rounded-lg bg-amber-100 text-amber-900">
+              <Search className="h-5 w-5" />
+            </span>
             <span>LR, Invoice & E-Waybill Universal Finder</span>
           </h3>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-600 font-medium mt-1">
             Instantly trace any Lorry Receipt (LR), invoice number, or e-waybill to its assigned vehicle, transporter, and consignment.
           </p>
         </div>
 
         {/* Input Bar */}
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex flex-col sm:flex-row gap-2.5">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
             <input
               type="text"
               autoFocus
               placeholder="Search by LR Number, Invoice #, or E-waybill #..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#00E676] font-mono shadow-xs"
             />
           </div>
 
-          <div className="flex space-x-1 bg-slate-800 p-1 rounded-lg border border-slate-700 text-xs">
+          <div className="flex space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
             {(
               [
                 { id: 'all', label: 'All Fields' },
@@ -100,10 +102,10 @@ export const LRLookupModal: React.FC<LRLookupProps> = ({
               <button
                 key={t.id}
                 onClick={() => setLookupType(t.id)}
-                className={`px-3 py-1.5 rounded-md font-medium transition-all ${
+                className={`px-3 py-1.5 rounded-lg transition-all ${
                   lookupType === t.id
-                    ? 'bg-indigo-600 text-white font-semibold'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-[#00E676] text-slate-950 font-black shadow-xs'
+                    : 'text-slate-600 hover:text-slate-950'
                 }`}
               >
                 {t.label}
@@ -114,14 +116,14 @@ export const LRLookupModal: React.FC<LRLookupProps> = ({
       </div>
 
       {/* Results Count */}
-      <div className="text-xs text-slate-400 px-1 flex justify-between items-center">
+      <div className="text-xs text-slate-600 px-1 flex justify-between items-center font-medium">
         <span>
-          Found <strong className="text-white">{results.length}</strong> matching LR record(s)
+          Found <strong className="text-slate-950 font-black">{results.length}</strong> matching LR record(s)
         </span>
         {query && (
           <button
             onClick={() => setQuery('')}
-            className="text-indigo-400 hover:underline"
+            className="text-emerald-700 hover:text-emerald-900 font-bold underline"
           >
             Reset search
           </button>
@@ -130,67 +132,71 @@ export const LRLookupModal: React.FC<LRLookupProps> = ({
 
       {/* Results List */}
       {results.length === 0 ? (
-        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-8 text-center text-slate-400 text-xs">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-8 text-center text-slate-500 text-xs font-medium shadow-xs">
           No matching LR, Invoice, or E-Waybill found.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
           {results.map(({ lr, dispatch }) => (
             <div
               key={`${dispatch.id}_${lr.id}`}
-              className="bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-xl p-4 shadow-sm space-y-3 transition-all"
+              className="bg-white border border-slate-200/90 hover:border-slate-300 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3 transition-all"
             >
               {/* Header with LR No and Freight */}
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
                 <div>
                   <div className="flex items-center space-x-2">
-                    <span className="font-mono font-bold text-white text-sm">
+                    <span className="font-mono font-black text-slate-950 text-sm">
                       {lr.lrNumber}
                     </span>
-                    <span className="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded font-mono">
+                    <span className="text-[10px] bg-slate-100 text-slate-800 border border-slate-300 px-2 py-0.5 rounded-md font-mono font-bold">
                       {lr.weight} {lr.weightUnit}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-400">
+                  <div className="text-[11px] text-slate-500 font-medium mt-0.5">
                     Dispatch Date: {dispatch.date}
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-[10px] text-slate-400">Freight</div>
-                  <div className="font-mono font-bold text-emerald-400 text-sm">
+                  <div className="text-[10px] text-slate-500 uppercase font-bold">Freight</div>
+                  <div className="font-mono font-black text-emerald-800 text-sm">
                     {formatCurrency(lr.freightAmount)}
                   </div>
                 </div>
               </div>
 
               {/* Vehicle & Transporter */}
-              <div className="bg-slate-800/40 p-2.5 rounded-lg border border-slate-800 text-xs flex items-center justify-between">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs flex items-center justify-between">
                 <div>
                   <div className="flex items-center space-x-2">
-                    <Truck className="h-3.5 w-3.5 text-indigo-400" />
-                    <span className="font-mono font-bold text-white">{dispatch.vehicleNumber}</span>
-                    <span className="text-[10px] text-amber-400 font-semibold uppercase">
-                      ({dispatch.placement})
+                    <Truck className="h-3.5 w-3.5 text-slate-600" />
+                    <span className="font-mono font-black text-slate-950">{dispatch.vehicleNumber}</span>
+                    <span className={`text-[10px] px-2 py-0.2 rounded-md font-bold uppercase ${
+                      dispatch.placement === 'Market'
+                        ? 'bg-[#FFB700] text-stone-950 border border-amber-400'
+                        : 'bg-[#00D2FF] text-slate-950 border border-cyan-400'
+                    }`}>
+                      {dispatch.placement}
                     </span>
                   </div>
-                  <div className="text-slate-400 text-[11px] mt-0.5">
+                  <div className="text-slate-600 text-[11px] mt-1 font-medium">
                     {dispatch.transporterName}
                   </div>
                 </div>
 
-                <div className="flex space-x-1">
+                <div className="flex space-x-1.5">
                   <button
                     onClick={() => onPrintDispatch(dispatch)}
                     title="Print Slip"
-                    className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                    className="p-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 shadow-xs"
                   >
                     <Printer className="h-3.5 w-3.5" />
                   </button>
                   <button
                     onClick={() => onOpenDispatch(dispatch)}
                     title="Open Full Dispatch"
-                    className="p-1.5 rounded bg-indigo-600/80 hover:bg-indigo-600 text-white"
+                    className="p-2 rounded-xl bg-[#00E676] hover:bg-[#00c864] text-slate-950 font-black border border-emerald-400 shadow-xs"
                   >
                     <Eye className="h-3.5 w-3.5" />
                   </button>
@@ -198,30 +204,30 @@ export const LRLookupModal: React.FC<LRLookupProps> = ({
               </div>
 
               {/* Consignor -> Consignee */}
-              <div className="text-xs text-slate-300 space-y-1">
-                <div className="flex items-center space-x-1.5 text-slate-400">
-                  <MapPin className="h-3 w-3 text-indigo-400 flex-shrink-0" />
+              <div className="text-xs text-slate-700 space-y-1">
+                <div className="flex items-center space-x-1.5 text-slate-600">
+                  <MapPin className="h-3 w-3 text-indigo-600 flex-shrink-0" />
                   <span className="truncate">
-                    <strong className="text-slate-200">{lr.consignorName}</strong> ({lr.consignorCity})
+                    <strong className="text-slate-950">{lr.consignorName}</strong> ({lr.consignorCity})
                   </span>
                 </div>
-                <div className="flex items-center space-x-1.5 text-slate-400">
-                  <MapPin className="h-3 w-3 text-emerald-400 flex-shrink-0" />
+                <div className="flex items-center space-x-1.5 text-slate-600">
+                  <MapPin className="h-3 w-3 text-emerald-600 flex-shrink-0" />
                   <span className="truncate">
-                    <strong className="text-slate-200">{lr.consigneeName}</strong> ({lr.consigneeCity})
+                    <strong className="text-slate-950">{lr.consigneeName}</strong> ({lr.consigneeCity})
                   </span>
                 </div>
               </div>
 
               {/* Invoices & E-waybills tags */}
-              <div className="pt-1 space-y-1 text-xs">
+              <div className="pt-1 space-y-1.5 text-xs">
                 {lr.invoiceNumbers && lr.invoiceNumbers.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1">
-                    <span className="text-[10px] text-amber-400 font-semibold">Inv:</span>
+                    <span className="text-[10px] text-amber-900 font-bold">Inv:</span>
                     {lr.invoiceNumbers.map((inv) => (
                       <span
                         key={inv}
-                        className="bg-amber-500/10 text-amber-300 border border-amber-500/20 px-1 py-0.2 rounded text-[10px] font-mono"
+                        className="bg-amber-100 text-amber-950 border border-amber-300 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold"
                       >
                         {inv}
                       </span>
@@ -230,11 +236,11 @@ export const LRLookupModal: React.FC<LRLookupProps> = ({
                 )}
                 {lr.ewaybillNumbers && lr.ewaybillNumbers.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1">
-                    <span className="text-[10px] text-teal-400 font-semibold">EWB:</span>
+                    <span className="text-[10px] text-cyan-900 font-bold">EWB:</span>
                     {lr.ewaybillNumbers.map((ewb) => (
                       <span
                         key={ewb}
-                        className="bg-teal-500/10 text-teal-300 border border-teal-500/20 px-1 py-0.2 rounded text-[10px] font-mono"
+                        className="bg-cyan-100 text-cyan-950 border border-cyan-300 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold"
                       >
                         {ewb}
                       </span>
