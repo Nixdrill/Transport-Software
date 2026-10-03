@@ -3,6 +3,7 @@ import { DispatchRecord, LRItem } from '../types/dispatch';
 import { formatCurrency } from '../lib/calculations';
 import { exportToExcel, downloadExcelTemplate } from '../lib/excelService';
 import { ExcelImportModal } from './ExcelImportModal';
+import { AIRouteMapsModal } from './AIRouteMapsModal';
 import { 
   Search, 
   Filter, 
@@ -27,7 +28,8 @@ import {
   RotateCcw,
   SlidersHorizontal,
   Building2,
-  Hash
+  Hash,
+  Sparkles
 } from 'lucide-react';
 
 interface DispatchesListProps {
@@ -41,6 +43,7 @@ interface DispatchesListProps {
   onImportExcel?: (dispatches: DispatchRecord[]) => void;
   initialTransporterFilter?: string;
   initialPlacementFilter?: 'All' | 'Market' | 'Own';
+  onGoToDashboardAudit?: () => void;
 }
 
 export const DispatchesList: React.FC<DispatchesListProps> = ({
@@ -54,6 +57,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
   onImportExcel,
   initialTransporterFilter,
   initialPlacementFilter,
+  onGoToDashboardAudit,
 }) => {
   // Search & Filter States
   const [keywordQuery, setKeywordQuery] = useState('');
@@ -73,6 +77,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
+  const [routeModalDispatch, setRouteModalDispatch] = useState<DispatchRecord | null>(null);
 
   // Distinct parties and transporters for filter dropdowns
   const distinctFromParties = useMemo(() => {
@@ -396,6 +401,20 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                 <span className="h-2 w-2 rounded-full bg-[#00E676] animate-pulse" />
               )}
             </button>
+
+            {/* AI Fleet Audit & Intelligence Shortcut */}
+            {onGoToDashboardAudit && (
+              <button
+                type="button"
+                onClick={onGoToDashboardAudit}
+                className="px-3 py-2 rounded-xl text-xs font-black flex items-center space-x-1.5 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 shadow-xs transition-all"
+                title="View deep Gemini AI Fleet Health & Anomaly Audit in Analytics"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                <span className="hidden sm:inline">AI Fleet Audit</span>
+                <span className="sm:hidden">AI Audit</span>
+              </button>
+            )}
 
             {/* Excel (.xlsx) Operations Suite */}
             <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
@@ -886,6 +905,15 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                     >
                       <button
                         type="button"
+                        onClick={() => setRouteModalDispatch(dsp)}
+                        title="Analyze Route & Highway Distance via Google Maps (AI)"
+                        className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 hover:text-emerald-950 transition-colors border border-emerald-300"
+                      >
+                        <MapPin className="h-4 w-4" />
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => onPrint(dsp)}
                         title="Print Lorry Receipt Slip"
                         className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-950 transition-colors border border-slate-200"
@@ -1174,6 +1202,18 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
           setIsExcelImportOpen(false);
         }}
       />
+
+      {/* AI Google Maps Route Intelligence Modal */}
+      {routeModalDispatch && (
+        <AIRouteMapsModal
+          isOpen={Boolean(routeModalDispatch)}
+          onClose={() => setRouteModalDispatch(null)}
+          defaultOrigin={routeModalDispatch.fromParty}
+          defaultDestination={routeModalDispatch.toParty}
+          vehicleType={routeModalDispatch.placement === 'Market' ? 'Market Commercial Vehicle' : 'Dedicated Fleet Vehicle'}
+          cargoWeight={routeModalDispatch.totalWeight}
+        />
+      )}
     </div>
   );
 };

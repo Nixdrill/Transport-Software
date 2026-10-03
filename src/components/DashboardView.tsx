@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DispatchRecord } from '../types/dispatch';
 import { formatCurrency } from '../lib/calculations';
+import { auditFleetHealth, FleetHealthAudit } from '../lib/geminiService';
 import { 
   BarChart3, 
   PieChart, 
@@ -8,6 +9,13 @@ import {
   IndianRupee, 
   Scale, 
   Award,
+  Sparkles,
+  RefreshCw,
+  AlertTriangle,
+  ShieldCheck,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -23,6 +31,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const [transporterMetric, setTransporterMetric] = useState<'value' | 'volume'>('value');
   const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
+
+  // Directly Integrated Gemini AI Fleet Health & Anomaly Audit State
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditResult, setAuditResult] = useState<FleetHealthAudit | null>(null);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [isAuditExpanded, setIsAuditExpanded] = useState(false);
+
+  const handleRunAiAudit = async () => {
+    if (records.length === 0) return;
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      const res = await auditFleetHealth(records);
+      setAuditResult(res);
+      setIsAuditExpanded(true);
+    } catch (err: any) {
+      setAuditError(err?.message || 'Failed to complete AI fleet health audit.');
+    } finally {
+      setAuditLoading(false);
+    }
+  };
 
   // Overall Aggregates
   const totalFreight = records.reduce((s, r) => s + (Number(r.totalFreightAmount) || 0), 0);
@@ -179,6 +208,90 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* DIRECTLY INTEGRATED GEMINI AI FLEET HEALTH & ANOMALY AUDITOR */}
+      <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border border-emerald-300 rounded-2xl p-5 shadow-xs space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center space-x-3">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-[#00E676] to-[#00c864] flex items-center justify-center text-slate-950 shadow-xs border border-emerald-400">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h3 className="text-sm font-black text-slate-950 tracking-tight">
+                  Gemini AI Fleet Health, Compliance & Anomaly Auditor
+                </h3>
+                <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-200 text-emerald-950 px-2 py-0.5 rounded-full border border-emerald-300">
+                  Direct AI Engine
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 font-medium mt-0.5">
+                Evaluates market lorry hire leakages, missing e-waybills / invoices, and generates actionable cost-saving recommendations.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleRunAiAudit}
+            disabled={auditLoading || records.length === 0}
+            className="px-4 py-2 bg-slate-950 hover:bg-slate-900 text-white font-black text-xs rounded-xl shadow-xs border border-emerald-400 flex items-center space-x-2 transition-all cursor-pointer disabled:opacity-50"
+          >
+            {auditLoading ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin text-[#00E676]" />
+                <span>Running Gemini AI Fleet Audit...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4 text-[#00E676]" />
+                <span>{auditResult ? 'Re-run Live AI Audit' : 'Run Live Gemini AI Audit'}</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {auditError && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold rounded-xl flex items-center space-x-2">
+            <AlertTriangle className="h-4 w-4 text-rose-600 flex-shrink-0" />
+            <span>{auditError}</span>
+          </div>
+        )}
+
+        {/* Audit Results Panel */}
+        {auditResult && (
+          <div className="bg-white border border-emerald-300 rounded-xl p-4 space-y-3 animate-in fade-in duration-200 shadow-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center space-x-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                <span className="text-xs font-black text-slate-950 uppercase tracking-wide">
+                  Audit Findings Across {auditResult.recordsAuditedCount} Dispatches
+                </span>
+              </div>
+              <button
+                onClick={() => setIsAuditExpanded(!isAuditExpanded)}
+                className="text-xs text-slate-500 hover:text-slate-800 font-bold flex items-center space-x-1"
+              >
+                <span>{isAuditExpanded ? 'Collapse' : 'Expand Details'}</span>
+                {isAuditExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+
+            <div className={`text-xs text-slate-800 leading-relaxed font-medium whitespace-pre-wrap ${!isAuditExpanded ? 'line-clamp-4' : ''}`}>
+              {auditResult.auditReport}
+            </div>
+
+            {!isAuditExpanded && (
+              <button
+                onClick={() => setIsAuditExpanded(true)}
+                className="text-[11px] text-emerald-700 hover:text-emerald-900 font-black flex items-center space-x-1 pt-1"
+              >
+                <span>Read Full Operational & Cost-Saving Report →</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Grid: Chart 1 (Monthly Freight Trend) & Chart 2 (Market vs Own Breakdown) */}

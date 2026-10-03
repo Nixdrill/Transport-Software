@@ -1,11 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { DispatchRecord, LRItem, PlacementType, DispatchStatus } from '../types/dispatch';
 import { LRItemForm } from './LRItemForm';
+import { AIRouteMapsModal } from './AIRouteMapsModal';
+import { AIMarketRateAdvisorModal } from './AIMarketRateAdvisorModal';
+import { AISmartTextParserModal } from './AISmartTextParserModal';
+import { ExtractedDispatch } from '../lib/geminiService';
+import { 
+  getMasters, 
+  findVehicleMaster, 
+  findPartyMaster, 
+  findRouteMaster 
+} from '../lib/mastersService';
+import { RouteMaster } from '../types/masters';
 import { 
   recalculateDispatchTotals, 
   generateSafeId, 
   formatCurrency, 
-  formatVehicleNumber 
+  formatVehicleNumber,
+  calculateGrossMarketFreight,
+  calculateNetMarketFreight
 } from '../lib/calculations';
 import { 
   Calendar, 
@@ -18,7 +31,13 @@ import {
   Shield, 
   Phone, 
   User, 
-  AlertTriangle
+  AlertTriangle,
+  Sparkles,
+  MapPin,
+  TrendingUp,
+  ExternalLink,
+  Check,
+  Route
 } from 'lucide-react';
 
 interface DispatchFormProps {
@@ -94,12 +113,192 @@ export const DispatchForm: React.FC<DispatchFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  // AI Modal States
+  const [isParserOpen, setIsParserOpen] = useState(false);
+  const [isRouteModalOpen, setIsRouteModalOpen] = useState(false);
+  const [rateAdvisorTargetLR, setRateAdvisorTargetLR] = useState<LRItem | null>(null);
+
+  // Masters Data State & Automation Notices
+  const [masters] = useState(() => getMasters());
+  const [autoFillNotice, setAutoFillNotice] = useState<string | null>(null);
+  const [matchedRoute, setMatchedRoute] = useState<RouteMaster | null>(null);
+
+  // Handle AI Auto-extracted dispatch from text
+  const handleApplyExtracted = (extracted: ExtractedDispatch) => {
+    if (extracted.date) setDate(extracted.date);
+    if (extracted.placement) setPlacement(extracted.placement);
+    if (extracted.vehicleNumber) setVehicleNumber(formatVehicleNumber(extracted.vehicleNumber));
+    if (extracted.fromParty) setFromParty(extracted.fromParty);
+    if (extracted.toParty) setToParty(extracted.toParty);
+    if (extracted.transporterName) setTransporterName(extracted.transporterName);
+    if (extracted.driverName) setDriverName(extracted.driverName);
+    if (extracted.driverPhone) setDriverPhone(extracted.driverPhone);
+    if (extracted.notes) {
+      setNotes((prev) => (prev ? `${prev}\n${extracted.notes}` : extracted.notes || ''));
+    }
+
+    if (extracted.lrs && extracted.lrs.length > 0) {
+      const mappedLRs: LRItem[] = extracted.lrs.map((extLR, idx) => {
+        const weight = extLR.weight || 0;
+        const rate = extLR.rate || 0;
+        const freight = extLR.freightAmount || Math.round(weight * rate);
+        const mWeight = extLR.marketWeight || (extracted.placement === 'Market' ? weight : 0);
+        const mRate = extLR.marketRate || 0;
+        const grossM = calculateGrossMarketFreight(mWeight, mRate);
+        const comm = extLR.marketCommission || 0;
+        const adv = extLR.marketAdvance || 0;
+        const netM = calculateNetMarketFreight(grossM, comm, adv);
+
+        return {
+          id: generateSafeId('lr'),
+          lrNumber: extLR.lrNumber || `LR-${Date.now().toString().slice(-4)}-${idx + 1}`,
+          lrDate: extLR.lrDate || (extracted.date || date),
+          consignorName: extLR.consignorName || extracted.fromParty || fromParty,
+          consignorCity: extLR.consignorCity || '',
+          consigneeName: extLR.consigneeName || extracted.toParty || toParty,
+          consigneeCity: extLR.consigneeCity || '',
+          invoiceNumbers: extLR.invoiceNumbers && extLR.invoiceNumbers.length > 0
+            ? extLR.invoiceNumbers
+            : (extLR as any).invoiceNumber
+            ? [(extLR as any).invoiceNumber]
+            : [],
+          ewaybillNumbers: extLR.ewaybillNumbers && extLR.ewaybillNumbers.length > 0
+            ? extLR.ewaybillNumbers
+            : (extLR as any).ewayBillNumber
+            ? [(extLR as any).ewayBillNumber]
+            : [],
+          weight: weight,
+          weightUnit: (extLR.weightUnit as any) || 'MT',
+          rate: rate,
+          rateType: (extLR.rateType as any) || 'per_mt',
+          freightAmount: freight,
+          advanceAmount: extLR.advanceAmount || 0,
+          extraCharges: extLR.extraCharges || 0,
+          marketWeight: mWeight,
+          marketRate: mRate,
+          grossMarketFreight: grossM,
+          marketCommission: comm,
+          marketAdvance: adv,
+          netMarketFreight: netM,
+          remarks: extLR.remarks || '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          ownerId: '',
+        };
+      });
+      setLrs(mappedLRs);
+    }
+  };
+
+  const handleApplyRouteDistance = (distanceKm: number) => {
+    const routeTag = `[Google Maps Grounded Route: ~${distanceKm} km]`;
+    setNotes((prev) => (prev ? `${prev} | ${routeTag}` : routeTag));
+  };
+
+  const handleApplyRecommendedRate = (recommendedRate: number, commission?: number, advancePercent?: number) => {
+    if (!rateAdvisorTargetLR) return;
+    const targetId = rateAdvisorTargetLR.id;
+    setLrs((prev) =>
+      prev.map((item) => {
+        if (item.id !== targetId) return item;
+        const mWeight = item.marketWeight || item.weight || 0;
+        const gross = calculateGrossMarketFreight(mWeight, recommendedRate);
+        const comm = commission !== undefined ? commission : (item.marketCommission || 500);
+        const adv = advancePercent ? Math.round(gross * (advancePercent / 100)) : (item.marketAdvance || 0);
+        const net = calculateNetMarketFreight(gross, comm, adv);
+        return {
+          ...item,
+          marketRate: recommendedRate,
+          grossMarketFreight: gross,
+          marketCommission: comm,
+          marketAdvance: adv,
+          netMarketFreight: net,
+        };
+      })
+    );
+  };
+
   // Recalculate totals automatically whenever LRs list changes or placement changes
   const totals = recalculateDispatchTotals(lrs, placement);
 
-  // Handle vehicle number input
+  // Handle vehicle number input with Vehicle Master Auto-Fill
   const handleVehicleChange = (val: string) => {
-    setVehicleNumber(formatVehicleNumber(val));
+    const formatted = formatVehicleNumber(val);
+    setVehicleNumber(formatted);
+
+    // Auto-fill from Vehicle Master if registered
+    const matchedVeh = findVehicleMaster(formatted);
+    if (matchedVeh) {
+      setPlacement(matchedVeh.placement);
+      if (matchedVeh.transporterName) setTransporterName(matchedVeh.transporterName);
+      if (matchedVeh.driverName) setDriverName(matchedVeh.driverName);
+      if (matchedVeh.driverPhone) setDriverPhone(matchedVeh.driverPhone);
+
+      // Pre-fill weight on LR 1 if blank
+      setLrs((prev) =>
+        prev.map((lr, idx) => {
+          if (idx === 0 && (!lr.weight || lr.weight === 0) && matchedVeh.capacityMT) {
+            return {
+              ...lr,
+              weight: matchedVeh.capacityMT,
+              marketWeight: matchedVeh.placement === 'Market' ? matchedVeh.capacityMT : (lr.marketWeight || 0),
+            };
+          }
+          return lr;
+        })
+      );
+
+      setAutoFillNotice(`⚡ Auto-filled specs from Vehicle Master: ${matchedVeh.vehicleType} (${matchedVeh.capacityMT} MT), ${matchedVeh.placement} fleet!`);
+      setTimeout(() => setAutoFillNotice(null), 6000);
+    }
+  };
+
+  const handleFromPartyChange = (val: string) => {
+    setFromParty(val);
+    const pty = findPartyMaster(val);
+    if (pty) {
+      setLrs((prev) =>
+        prev.map((lr, i) => (i === 0 && !lr.consignorCity ? { ...lr, consignorName: pty.name, consignorCity: pty.city } : lr))
+      );
+    }
+    const rt = findRouteMaster(val, toParty);
+    setMatchedRoute(rt || null);
+  };
+
+  const handleToPartyChange = (val: string) => {
+    setToParty(val);
+    const pty = findPartyMaster(val);
+    if (pty) {
+      setLrs((prev) =>
+        prev.map((lr, i) => (i === 0 && !lr.consigneeCity ? { ...lr, consigneeName: pty.name, consigneeCity: pty.city } : lr))
+      );
+    }
+    const rt = findRouteMaster(fromParty, val);
+    setMatchedRoute(rt || null);
+  };
+
+  const handleApplyRouteBenchmarks = () => {
+    if (!matchedRoute) return;
+    const corridorTag = `[Corridor: ${matchedRoute.origin} → ${matchedRoute.destination} | ${matchedRoute.distanceKm} km | Est. ${matchedRoute.transitDays} Days | Hwy: ${matchedRoute.primaryHighways || 'NH'}]`;
+    setNotes((prev) => (prev ? `${prev}\n${corridorTag}` : corridorTag));
+
+    // Update first LR rate if 0
+    setLrs((prev) =>
+      prev.map((lr, i) => {
+        if (i === 0 && (!lr.rate || lr.rate === 0)) {
+          const w = lr.weight || 20;
+          return {
+            ...lr,
+            rate: matchedRoute.benchmarkRatePerMT,
+            freightAmount: Math.round(w * matchedRoute.benchmarkRatePerMT),
+            marketRate: lr.marketRate || Math.round(matchedRoute.benchmarkRatePerMT * 0.9),
+          };
+        }
+        return lr;
+      })
+    );
+    setAutoFillNotice(`⚡ Applied Route Master benchmark (₹${matchedRoute.benchmarkRatePerMT}/MT, ${matchedRoute.distanceKm} km)!`);
+    setTimeout(() => setAutoFillNotice(null), 5000);
   };
 
   // Update a single LR
@@ -351,6 +550,48 @@ export const DispatchForm: React.FC<DispatchFormProps> = ({
         </div>
       )}
 
+      {/* AI Copilot Intelligence Banner */}
+      <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border border-emerald-300 rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 shadow-xs">
+        <div className="flex items-center space-x-3.5">
+          <div className="h-11 w-11 rounded-2xl bg-gradient-to-tr from-[#00E676] to-[#00c864] flex items-center justify-center text-slate-950 font-black shadow-xs border border-emerald-400">
+            <Sparkles className="h-6 w-6" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-black text-slate-950 tracking-tight">Gemini AI Logistics Copilot</span>
+              <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-200 text-emerald-950 px-2 py-0.5 rounded-full border border-emerald-300">
+                Maps Grounded
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 font-medium mt-0.5">
+              Auto-extract full dispatch details from raw text/WhatsApp, or analyze real-world highway routes & mileage.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+          <button
+            type="button"
+            onClick={() => setIsParserOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-900 border border-emerald-400 text-xs font-black shadow-xs flex items-center space-x-1.5 transition-all hover:border-emerald-500"
+            title="Paste WhatsApp text, transporter SMS, or challan summary to auto-populate form"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+            <span>AI Smart Text / WhatsApp Parser</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsRouteModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-[#00E676] hover:bg-[#00c864] text-slate-950 border border-emerald-500 text-xs font-black shadow-xs flex items-center space-x-1.5 transition-all"
+            title="Run Google Maps Grounded Route & Distance calculation"
+          >
+            <MapPin className="h-3.5 w-3.5 text-slate-950" />
+            <span>AI Maps Route & Transit</span>
+          </button>
+        </div>
+      </div>
+
       {/* SECTION 1: TRIP & VEHICLE PARTICULARS */}
       <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-6 shadow-xs space-y-5">
         <div className="flex items-center space-x-2 border-b border-slate-100 pb-3">
@@ -413,13 +654,17 @@ export const DispatchForm: React.FC<DispatchFormProps> = ({
 
           {/* Vehicle Number */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center space-x-1">
-              <Truck className="h-3.5 w-3.5 text-slate-500" />
-              <span>Vehicle Number <span className="text-rose-600">*</span></span>
+            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+              <span className="flex items-center space-x-1">
+                <Truck className="h-3.5 w-3.5 text-slate-500" />
+                <span>Vehicle Number <span className="text-rose-600">*</span></span>
+              </span>
+              <span className="text-[10px] text-emerald-800 font-bold">Auto-fills from Master</span>
             </label>
             <input
               type="text"
               required
+              list="vehicles-list"
               placeholder="e.g. MH 12 RN 4589"
               value={vehicleNumber}
               onChange={(e) => handleVehicleChange(e.target.value)}
@@ -428,37 +673,79 @@ export const DispatchForm: React.FC<DispatchFormProps> = ({
           </div>
         </div>
 
-        {/* Row 2: From Party & To Party */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              From Party (Origin / Billing Party) <span className="text-rose-600">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              list="parties-list"
-              placeholder="e.g. Tata Steel Processing Ltd"
-              value={fromParty}
-              onChange={(e) => setFromParty(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#00E676]"
-            />
+        {/* Master Auto-Fill Notice */}
+        {autoFillNotice && (
+          <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs font-black rounded-xl flex items-center space-x-2 animate-in fade-in duration-150 shadow-xs">
+            <Check className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+            <span>{autoFillNotice}</span>
+          </div>
+        )}
+
+        {/* Row 2: From Party & To Party with AI Maps Route trigger */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-800">Dispatch Route Corridor</span>
+            <button
+              type="button"
+              onClick={() => setIsRouteModalOpen(true)}
+              className="text-xs font-black text-emerald-800 hover:text-emerald-950 flex items-center space-x-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-lg transition-colors shadow-xs"
+              title="Calculate route distance and transit time via Google Maps Grounding"
+            >
+              <MapPin className="h-3.5 w-3.5 text-emerald-700" />
+              <span>Verify Distance with Google Maps (AI)</span>
+            </button>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              To Party (Destination / Client) <span className="text-rose-600">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              list="parties-list"
-              placeholder="e.g. Larsen & Toubro Infra Projects"
-              value={toParty}
-              onChange={(e) => setToParty(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#00E676]"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                From Party (Origin / Billing Party) <span className="text-rose-600">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                list="parties-list"
+                placeholder="e.g. Tata Steel Processing Ltd"
+                value={fromParty}
+                onChange={(e) => handleFromPartyChange(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#00E676]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                To Party (Destination / Client) <span className="text-rose-600">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                list="parties-list"
+                placeholder="e.g. Larsen & Toubro Infra Projects"
+                value={toParty}
+                onChange={(e) => handleToPartyChange(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#00E676]"
+              />
+            </div>
           </div>
+
+          {/* Matched Route Master Banner */}
+          {matchedRoute && (
+            <div className="p-3 bg-sky-50 border border-sky-300 text-sky-950 text-xs rounded-xl flex flex-wrap items-center justify-between gap-2 shadow-xs animate-in fade-in duration-150">
+              <div className="flex items-center space-x-2 font-bold">
+                <Route className="h-4 w-4 text-sky-700 flex-shrink-0" />
+                <span>
+                  Matched Route Master: <strong>{matchedRoute.origin} → {matchedRoute.destination}</strong> ({matchedRoute.distanceKm} km, Benchmark: ₹{matchedRoute.benchmarkRatePerMT}/MT, Transit: {matchedRoute.transitDays} Days)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleApplyRouteBenchmarks}
+                className="px-2.5 py-1 bg-sky-600 hover:bg-sky-700 text-white font-black rounded-lg text-[11px] shadow-xs cursor-pointer"
+              >
+                Apply Corridor Benchmark (₹{matchedRoute.benchmarkRatePerMT}/MT)
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Row 3: Transporter Name & Driver details */}
@@ -511,15 +798,27 @@ export const DispatchForm: React.FC<DispatchFormProps> = ({
           </div>
         </div>
 
-        {/* Suggestion datalists */}
+        {/* Suggestion datalists powered by Masters */}
         <datalist id="parties-list">
-          {existingParties.map((p) => (
+          {Array.from(new Set([...masters.parties.map((p) => p.name), ...existingParties])).map((p) => (
             <option key={p} value={p} />
           ))}
         </datalist>
+        <datalist id="vehicles-list">
+          {masters.vehicles.map((v) => (
+            <option key={v.id} value={v.vehicleNumber}>
+              {v.vehicleType} • {v.capacityMT} MT ({v.placement})
+            </option>
+          ))}
+        </datalist>
         <datalist id="transporters-list">
-          {existingTransporters.map((t) => (
+          {Array.from(new Set([...masters.transporters.map((t) => t.name), ...existingTransporters])).map((t) => (
             <option key={t} value={t} />
+          ))}
+        </datalist>
+        <datalist id="commodities-list">
+          {masters.commodities.map((c) => (
+            <option key={c.id} value={c.name} />
           ))}
         </datalist>
       </div>
@@ -564,6 +863,7 @@ export const DispatchForm: React.FC<DispatchFormProps> = ({
             onChange={(updated) => handleLRChange(index, updated)}
             onDelete={() => handleDeleteLR(index)}
             onDuplicate={() => handleDuplicateLR(index)}
+            onOpenRateAdvisor={(targetItem) => setRateAdvisorTargetLR(targetItem)}
           />
         ))}
 
@@ -686,6 +986,39 @@ export const DispatchForm: React.FC<DispatchFormProps> = ({
           </div>
         </div>
       </div>
+
+      {/* AI Smart Text / WhatsApp Parser Modal */}
+      <AISmartTextParserModal
+        isOpen={isParserOpen}
+        onClose={() => setIsParserOpen(false)}
+        onApplyExtracted={handleApplyExtracted}
+      />
+
+      {/* AI Google Maps Grounded Route & Distance Modal */}
+      <AIRouteMapsModal
+        isOpen={isRouteModalOpen}
+        onClose={() => setIsRouteModalOpen(false)}
+        defaultOrigin={fromParty}
+        defaultDestination={toParty}
+        vehicleType={placement === 'Market' ? 'Market Commercial Truck' : 'Dedicated Fleet Vehicle'}
+        cargoWeight={totals.totalWeight}
+        onApplyDistance={handleApplyRouteDistance}
+      />
+
+      {/* AI Market Rate Benchmark & Negotiation Modal */}
+      {rateAdvisorTargetLR && (
+        <AIMarketRateAdvisorModal
+          isOpen={Boolean(rateAdvisorTargetLR)}
+          onClose={() => setRateAdvisorTargetLR(null)}
+          origin={rateAdvisorTargetLR.consignorCity || fromParty}
+          destination={rateAdvisorTargetLR.consigneeCity || toParty}
+          weightMT={rateAdvisorTargetLR.marketWeight || rateAdvisorTargetLR.weight || 10}
+          currentRate={rateAdvisorTargetLR.marketRate}
+          billingRate={rateAdvisorTargetLR.rate}
+          cargoType={rateAdvisorTargetLR.remarks || 'Industrial Freight'}
+          onApplyRate={handleApplyRecommendedRate}
+        />
+      )}
     </form>
   );
 };

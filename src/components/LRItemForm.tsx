@@ -37,6 +37,7 @@ interface LRItemFormProps {
     consignees: string[];
     cities: string[];
   };
+  onOpenRateAdvisor?: (item: LRItem) => void;
 }
 
 export const LRItemForm: React.FC<LRItemFormProps> = ({
@@ -47,6 +48,7 @@ export const LRItemForm: React.FC<LRItemFormProps> = ({
   onChange,
   onDelete,
   onDuplicate,
+  onOpenRateAdvisor,
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [newInvoiceInput, setNewInvoiceInput] = useState('');
@@ -615,32 +617,46 @@ export const LRItemForm: React.FC<LRItemFormProps> = ({
                   </div>
                 </div>
 
-                {(!item.marketWeight || item.marketWeight === 0) && item.weight > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const mWeight = item.weight;
-                      const mRate = item.marketRate || Math.round(item.rate * 0.9);
-                      const gross = calculateGrossMarketFreight(mWeight, mRate);
-                      const comm = item.marketCommission || 500;
-                      const adv = item.marketAdvance || 0;
-                      const net = calculateNetMarketFreight(gross, comm, adv);
-                      onChange({
-                        ...item,
-                        marketWeight: mWeight,
-                        marketRate: mRate,
-                        grossMarketFreight: gross,
-                        marketCommission: comm,
-                        marketAdvance: adv,
-                        netMarketFreight: net,
-                      });
-                    }}
-                    className="text-xs text-stone-950 bg-[#FFB700] hover:bg-[#e6a500] font-black border border-amber-500 px-3 py-1 rounded-xl transition-all shadow-xs flex items-center space-x-1"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    <span>Pre-fill from Billing Weight ({item.weight} MT)</span>
-                  </button>
-                )}
+                <div className="flex items-center space-x-2">
+                  {onOpenRateAdvisor && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenRateAdvisor(item)}
+                      className="text-xs text-amber-950 bg-amber-100 hover:bg-amber-200 font-black border border-amber-400 px-3 py-1 rounded-xl transition-all shadow-xs flex items-center space-x-1"
+                      title="Get Gemini AI Market Rate benchmark and negotiation advisor for this corridor"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-amber-700" />
+                      <span>AI Rate Advisor</span>
+                    </button>
+                  )}
+
+                  {(!item.marketWeight || item.marketWeight === 0) && item.weight > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const mWeight = item.weight;
+                        const mRate = item.marketRate || Math.round(item.rate * 0.9);
+                        const gross = calculateGrossMarketFreight(mWeight, mRate);
+                        const comm = item.marketCommission || 500;
+                        const adv = item.marketAdvance || 0;
+                        const net = calculateNetMarketFreight(gross, comm, adv);
+                        onChange({
+                          ...item,
+                          marketWeight: mWeight,
+                          marketRate: mRate,
+                          grossMarketFreight: gross,
+                          marketCommission: comm,
+                          marketAdvance: adv,
+                          netMarketFreight: net,
+                        });
+                      }}
+                      className="text-xs text-stone-950 bg-[#FFB700] hover:bg-[#e6a500] font-black border border-amber-500 px-3 py-1 rounded-xl transition-all shadow-xs flex items-center space-x-1"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>Pre-fill from Billing Weight ({item.weight} MT)</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Grid 1: Market Weight, Market Rate, Gross Market Freight */}

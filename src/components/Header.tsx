@@ -16,14 +16,16 @@ import {
   BarChart3, 
   User as UserIcon, 
   Shield, 
-  Settings 
+  Settings,
+  Sparkles,
+  Layers
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { AppUser } from '../lib/authService';
 
 interface HeaderProps {
-  activeTab: 'form' | 'list' | 'lookup' | 'dashboard' | 'settings';
-  setActiveTab: (tab: 'form' | 'list' | 'lookup' | 'dashboard' | 'settings') => void;
+  activeTab: 'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'settings';
+  setActiveTab: (tab: 'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'settings') => void;
   isOnline: boolean;
   isSyncing: boolean;
   pendingCount: number;
@@ -34,6 +36,7 @@ interface HeaderProps {
   onSyncNow: () => void;
   onNewEntry: () => void;
   lastSynced: Date | null;
+  onOpenCopilot?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -49,6 +52,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSyncNow,
   onNewEntry,
   lastSynced,
+  onOpenCopilot,
 }) => {
   const currentDisplayName = appUser?.displayName || user?.displayName || appUser?.username || user?.email?.split('@')[0];
   const currentRole = appUser?.role || 'dispatcher';
@@ -228,6 +232,18 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             <button
+              onClick={() => setActiveTab('masters')}
+              className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-black transition-all ${
+                activeTab === 'masters'
+                  ? 'bg-white text-slate-950 shadow-xs border border-slate-300'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
+            >
+              <Layers className="h-4 w-4 text-[#00E676]" />
+              <span>Masters</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('settings')}
               className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all ${
                 activeTab === 'settings'
@@ -241,16 +257,18 @@ export const Header: React.FC<HeaderProps> = ({
           </nav>
 
           {/* Quick Action Button */}
-          {activeTab !== 'form' && (
-            <button
-              onClick={onNewEntry}
-              className="flex items-center space-x-1.5 bg-[#00E676] hover:bg-[#00c864] text-slate-950 text-xs px-3.5 py-1.5 rounded-lg font-black shadow-xs border border-emerald-400 transition-all"
-            >
-              <PlusCircle className="h-3.5 w-3.5 text-slate-950" />
-              <span className="hidden sm:inline">Add New LR Trip</span>
-              <span className="sm:hidden">New</span>
-            </button>
-          )}
+          <div className="flex items-center space-x-2">
+            {activeTab !== 'form' && (
+              <button
+                onClick={onNewEntry}
+                className="flex items-center space-x-1.5 bg-[#00E676] hover:bg-[#00c864] text-slate-950 text-xs px-3.5 py-1.5 rounded-lg font-black shadow-xs border border-emerald-400 transition-all"
+              >
+                <PlusCircle className="h-3.5 w-3.5 text-slate-950" />
+                <span className="hidden sm:inline">Add New LR Trip</span>
+                <span className="sm:hidden">New</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </header>

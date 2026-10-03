@@ -29,7 +29,8 @@ import { DashboardView } from './components/DashboardView';
 import { SettingsView } from './components/SettingsView';
 import { PrintDispatchModal } from './components/PrintDispatchModal';
 import { AuthModal } from './components/AuthModal';
-import { CheckCircle2, AlertCircle, RefreshCw, X } from 'lucide-react';
+import { MastersView } from './components/MastersView';
+import { CheckCircle2, AlertCircle, RefreshCw, X, Sparkles } from 'lucide-react';
 import { generateSafeId } from './lib/calculations';
 
 export default function App() {
@@ -43,7 +44,7 @@ export default function App() {
   const [activeTheme, setActiveTheme] = useState<string>(getSavedTheme());
   
   // Navigation & View
-  const [activeTab, setActiveTab] = useState<'form' | 'list' | 'lookup' | 'dashboard' | 'settings'>('list');
+  const [activeTab, setActiveTab] = useState<'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'settings'>('list');
   const [records, setRecords] = useState<DispatchRecord[]>([]);
   const [editingRecord, setEditingRecord] = useState<DispatchRecord | null>(null);
   const [printRecord, setPrintRecord] = useState<DispatchRecord | null>(null);
@@ -500,6 +501,7 @@ export default function App() {
             onImportExcel={handleImportExcelRecords}
             initialTransporterFilter={targetTransporterFilter}
             initialPlacementFilter={placementFilter}
+            onGoToDashboardAudit={() => setActiveTab('dashboard')}
           />
         )}
 
@@ -530,7 +532,14 @@ export default function App() {
           />
         )}
 
-        {/* TAB 5: Settings, Data Backup, Restore, Delete & Theme Picker */}
+        {/* TAB 5: Masters Data Center (Auto-fill, Automations & Gemini AI Corridor Benchmark) */}
+        {activeTab === 'masters' && (
+          <MastersView
+            showNotification={showNotification}
+          />
+        )}
+
+        {/* TAB 6: Settings, Data Backup, Restore, Delete & Theme Picker */}
         {activeTab === 'settings' && (
           <SettingsView
             records={records}
