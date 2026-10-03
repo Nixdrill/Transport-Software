@@ -1,0 +1,6 @@
+{
+  "name": "LogiTrack - Transport & LR Management",
+  "description": "Logistics data entry web app with LR records, multi-invoicing, e-waybills, freight auto-calculations, and offline synchronization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

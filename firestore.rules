@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidDispatch(data) {
+      return data.keys().hasAll(['date', 'fromParty', 'toParty', 'placement', 'transporterName', 'vehicleNumber', 'ownerId']) &&
+             data.date is string && data.date.size() <= 10 &&
+             data.fromParty is string && data.fromParty.size() <= 150 &&
+             data.toParty is string && data.toParty.size() <= 150 &&
+             (data.placement == 'Market' || data.placement == 'Own') &&
+             data.transporterName is string && data.transporterName.size() <= 150 &&
+             data.vehicleNumber is string && data.vehicleNumber.size() <= 30 &&
+             data.ownerId == request.auth.uid;
+    }
+
+    function isValidLRItem(data) {
+      return data.keys().hasAll(['lrNumber', 'consignorName', 'consignorCity', 'consigneeName', 'consigneeCity', 'weight', 'rate', 'freightAmount', 'ownerId']) &&
+             data.lrNumber is string && data.lrNumber.size() <= 50 &&
+             data.consignorName is string && data.consignorName.size() <= 150 &&
+             data.consignorCity is string && data.consignorCity.size() <= 100 &&
+             data.consigneeName is string && data.consigneeName.size() <= 150 &&
+             data.consigneeCity is string && data.consigneeCity.size() <= 100 &&
+             data.weight is number &&
+             data.rate is number &&
+             data.freightAmount is number &&
+             data.ownerId == request.auth.uid;
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['username', 'email', 'ownerId']) &&
+             data.username is string && data.username.size() <= 50 &&
+             data.email is string && data.email.size() <= 100 &&
+             data.ownerId == request.auth.uid;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow create, update: if isSignedIn() && isValidId(userId) && request.auth.uid == userId && isValidUserProfile(incoming());
+      allow delete: if false;
+    }
+
+    match /dispatches/{dispatchId} {
+      allow get: if isSignedIn() && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(dispatchId) && isValidDispatch(incoming());
+      allow update: if isSignedIn() && isValidId(dispatchId) && isValidDispatch(incoming()) && incoming().ownerId == existing().ownerId;
+      allow delete: if isSignedIn() && isValidId(dispatchId) && existing().ownerId == request.auth.uid;
+
+      match /lrs/{lrId} {
+        allow get: if isSignedIn() && existing().ownerId == request.auth.uid;
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(lrId) && isValidLRItem(incoming()) && 
+                         exists(/databases/$(database)/documents/dispatches/$(dispatchId)) &&
+                         get(/databases/$(database)/documents/dispatches/$(dispatchId)).data.ownerId == request.auth.uid;
+        allow update: if isSignedIn() && isValidId(lrId) && isValidLRItem(incoming()) && incoming().ownerId == existing().ownerId;
+        allow delete: if isSignedIn() && isValidId(lrId) && existing().ownerId == request.auth.uid;
+      }
+    }
+  }
+}

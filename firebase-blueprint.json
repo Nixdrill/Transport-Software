@@ -1,0 +1,265 @@
+{
+  "entities": {
+    "Dispatch": {
+      "title": "Dispatch",
+      "description": "Top-level transport dispatch record carrying one or more LRs",
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "description": "Date of dispatch (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "fromParty": {
+          "type": "string",
+          "description": "Origin / Billing from party name",
+          "maxLength": 150
+        },
+        "toParty": {
+          "type": "string",
+          "description": "Destination / Billing to party name",
+          "maxLength": 150
+        },
+        "placement": {
+          "type": "string",
+          "description": "Vehicle placement type",
+          "enum": ["Market", "Own"]
+        },
+        "transporterName": {
+          "type": "string",
+          "description": "Name of the transporter or fleet company",
+          "maxLength": 150
+        },
+        "vehicleNumber": {
+          "type": "string",
+          "description": "Vehicle registration number",
+          "maxLength": 30
+        },
+        "lrNumbers": {
+          "type": "array",
+          "description": "Array of LR numbers included in this dispatch"
+        },
+        "totalWeight": {
+          "type": "number",
+          "description": "Cumulative total weight"
+        },
+        "totalFreightAmount": {
+          "type": "number",
+          "description": "Cumulative total freight amount"
+        },
+        "totalGrossMarketFreight": {
+          "type": "number",
+          "description": "Cumulative gross market freight for hired vehicle"
+        },
+        "totalMarketCommission": {
+          "type": "number",
+          "description": "Cumulative commission deducted from market vehicle"
+        },
+        "totalMarketAdvance": {
+          "type": "number",
+          "description": "Cumulative advance paid to market vehicle"
+        },
+        "totalNetMarketFreight": {
+          "type": "number",
+          "description": "Cumulative net market freight payable to transporter"
+        },
+        "totalLrsCount": {
+          "type": "number",
+          "description": "Count of LRs attached"
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the dispatch",
+          "enum": ["Draft", "Confirmed", "In Transit", "Delivered"]
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional notes or instructions",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when record was created"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when record was last updated"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "UID of user who created the record",
+          "maxLength": 128
+        }
+      },
+      "required": ["date", "fromParty", "toParty", "placement", "transporterName", "vehicleNumber", "ownerId"]
+    },
+    "LRItem": {
+      "title": "LRItem",
+      "description": "Detailed Lorry Receipt (LR) record inside a dispatch",
+      "type": "object",
+      "properties": {
+        "lrNumber": {
+          "type": "string",
+          "description": "Lorry receipt number",
+          "maxLength": 50
+        },
+        "consignorName": {
+          "type": "string",
+          "description": "Consignor / Sender business name",
+          "maxLength": 150
+        },
+        "consignorCity": {
+          "type": "string",
+          "description": "Consignor city/location",
+          "maxLength": 100
+        },
+        "consigneeName": {
+          "type": "string",
+          "description": "Consignee / Receiver business name",
+          "maxLength": 150
+        },
+        "consigneeCity": {
+          "type": "string",
+          "description": "Consignee city/location",
+          "maxLength": 100
+        },
+        "invoiceNumbers": {
+          "type": "array",
+          "description": "List of invoice numbers attached to LR"
+        },
+        "ewaybillNumbers": {
+          "type": "array",
+          "description": "List of e-waybill numbers attached to LR"
+        },
+        "weight": {
+          "type": "number",
+          "description": "Cargo weight"
+        },
+        "weightUnit": {
+          "type": "string",
+          "description": "Unit of weight",
+          "enum": ["MT", "Kg", "Quintal"]
+        },
+        "rate": {
+          "type": "number",
+          "description": "Freight rate"
+        },
+        "rateType": {
+          "type": "string",
+          "description": "Freight rate calculation basis",
+          "enum": ["per_mt", "per_kg", "per_quintal", "fixed"]
+        },
+        "freightAmount": {
+          "type": "number",
+          "description": "Auto-calculated freight amount"
+        },
+        "advanceAmount": {
+          "type": "number",
+          "description": "Advance paid for this LR"
+        },
+        "extraCharges": {
+          "type": "number",
+          "description": "Additional charges"
+        },
+        "remarks": {
+          "type": "string",
+          "description": "LR remarks or specific item details",
+          "maxLength": 500
+        },
+        "marketWeight": {
+          "type": "number",
+          "description": "Weight agreed with market transporter"
+        },
+        "marketRate": {
+          "type": "number",
+          "description": "Rate agreed with market transporter"
+        },
+        "grossMarketFreight": {
+          "type": "number",
+          "description": "Gross freight payable to market transporter"
+        },
+        "marketCommission": {
+          "type": "number",
+          "description": "Deductions: Commission/brokerage deducted from transporter"
+        },
+        "marketAdvance": {
+          "type": "number",
+          "description": "Deductions: Advance paid to market vehicle"
+        },
+        "netMarketFreight": {
+          "type": "number",
+          "description": "Net market freight payable after deductions"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Update timestamp"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "UID of the creator",
+          "maxLength": 128
+        }
+      },
+      "required": ["lrNumber", "consignorName", "consignorCity", "consigneeName", "consigneeCity", "weight", "rate", "freightAmount", "ownerId"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Registered user profile in LogiTrack system",
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "Unique username chosen by the user",
+          "maxLength": 50
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user",
+          "maxLength": 100
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Full name or company display name",
+          "maxLength": 100
+        },
+        "role": {
+          "type": "string",
+          "description": "System role",
+          "enum": ["admin", "dispatcher", "operator"]
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when user registered"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when user profile updated"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase UID of user",
+          "maxLength": 128
+        }
+      },
+      "required": ["username", "email", "ownerId"]
+    }
+  },
+  "firestore": {
+    "/dispatches/{dispatchId}": {
+      "schema": "Dispatch",
+      "description": "Collection of top-level transport and vehicle dispatches"
+    },
+    "/dispatches/{dispatchId}/lrs/{lrId}": {
+      "schema": "LRItem",
+      "description": "Collection of individual Lorry Receipts belonging to a dispatch"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile collection isolated per authenticated user"
+    }
+  }
+}
