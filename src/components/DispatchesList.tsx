@@ -29,7 +29,8 @@ import {
   SlidersHorizontal,
   Building2,
   Hash,
-  Sparkles
+  Sparkles,
+  Receipt
 } from 'lucide-react';
 
 interface DispatchesListProps {
@@ -38,6 +39,7 @@ interface DispatchesListProps {
   onDelete: (id: string) => void;
   onDuplicate: (record: DispatchRecord) => void;
   onPrint: (record: DispatchRecord) => void;
+  onGenerateInvoice?: (record: DispatchRecord) => void;
   onNewEntry: () => void;
   onLoadSampleData: () => void;
   onImportExcel?: (dispatches: DispatchRecord[]) => void;
@@ -52,6 +54,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
   onDelete,
   onDuplicate,
   onPrint,
+  onGenerateInvoice,
   onNewEntry,
   onLoadSampleData,
   onImportExcel,
@@ -903,11 +906,22 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                       className="flex items-center space-x-1.5 justify-end"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {onGenerateInvoice && (
+                        <button
+                          type="button"
+                          onClick={() => onGenerateInvoice(dsp)}
+                          title="Generate Freight Bill / Tax Invoice"
+                          className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 hover:text-emerald-950 transition-colors border border-emerald-300 font-bold"
+                        >
+                          <Receipt className="h-4 w-4" />
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={() => setRouteModalDispatch(dsp)}
                         title="Analyze Route & Highway Distance via Google Maps (AI)"
-                        className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 hover:text-emerald-950 transition-colors border border-emerald-300"
+                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-950 transition-colors border border-slate-200"
                       >
                         <MapPin className="h-4 w-4" />
                       </button>
@@ -1167,6 +1181,15 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                     </div>
 
                     <div className="flex justify-end space-x-2 pt-1">
+                      {onGenerateInvoice && (
+                        <button
+                          onClick={() => onGenerateInvoice(dsp)}
+                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 rounded-lg text-xs font-bold flex items-center space-x-1 shadow-xs"
+                        >
+                          <Receipt className="h-3.5 w-3.5 text-emerald-700" />
+                          <span>Generate Tax Invoice / Bill</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => onPrint(dsp)}
                         className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-lg text-xs font-bold flex items-center space-x-1 shadow-xs"

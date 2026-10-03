@@ -18,14 +18,15 @@ import {
   Shield, 
   Settings,
   Sparkles,
-  Layers
+  Layers,
+  Receipt
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { AppUser } from '../lib/authService';
 
 interface HeaderProps {
-  activeTab: 'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'settings';
-  setActiveTab: (tab: 'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'settings') => void;
+  activeTab: 'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'billing' | 'settings';
+  setActiveTab: (tab: 'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'billing' | 'settings') => void;
   isOnline: boolean;
   isSyncing: boolean;
   pendingCount: number;
@@ -241,6 +242,18 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Layers className="h-4 w-4 text-[#00E676]" />
               <span>Masters</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('billing')}
+              className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-black transition-all ${
+                activeTab === 'billing'
+                  ? 'bg-white text-slate-950 shadow-xs border border-slate-300'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
+            >
+              <Receipt className="h-4 w-4 text-emerald-600" />
+              <span>Invoices & Billing</span>
             </button>
 
             <button

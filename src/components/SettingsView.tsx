@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { DispatchRecord } from '../types/dispatch';
 import { AllMasters } from '../types/masters';
+import { FreightInvoice } from '../types/invoice';
 import { AVAILABLE_THEMES } from '../lib/theme';
 import { formatCurrency } from '../lib/calculations';
 import { exportToExcel, downloadExcelTemplate } from '../lib/excelService';
 import { ExcelImportModal } from './ExcelImportModal';
+import { getInvoices } from '../lib/invoiceService';
 import { 
   getMasters, 
   saveMasters, 
@@ -34,6 +36,7 @@ import {
   UserCheck,
   Package,
   RefreshCw,
+  Receipt,
   X
 } from 'lucide-react';
 
@@ -43,7 +46,7 @@ interface SettingsViewProps {
   onThemeChange: (themeId: string) => void;
   onBackupData: () => void;
   onBackupMastersOnly?: () => void;
-  onRestoreData: (records: DispatchRecord[], mode: 'replace' | 'merge', masters?: AllMasters) => void;
+  onRestoreData: (records: DispatchRecord[], mode: 'replace' | 'merge', masters?: AllMasters, invoices?: FreightInvoice[]) => void;
   onDeleteAllData: () => Promise<void>;
   onClearMastersData?: () => void;
   onResetMastersData?: () => void;

@@ -1,16 +1,18 @@
 import React from 'react';
 import { DispatchRecord } from '../types/dispatch';
 import { formatCurrency } from '../lib/calculations';
-import { Printer, X, Download, Truck, CheckSquare } from 'lucide-react';
+import { Printer, X, Download, Truck, CheckSquare, Receipt } from 'lucide-react';
 
 interface PrintDispatchModalProps {
   record: DispatchRecord | null;
   onClose: () => void;
+  onGenerateInvoice?: (record: DispatchRecord) => void;
 }
 
 export const PrintDispatchModal: React.FC<PrintDispatchModalProps> = ({
   record,
   onClose,
+  onGenerateInvoice,
 }) => {
   if (!record) return null;
 
@@ -32,6 +34,18 @@ export const PrintDispatchModal: React.FC<PrintDispatchModalProps> = ({
             </h3>
           </div>
           <div className="flex items-center space-x-2">
+            {onGenerateInvoice && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onGenerateInvoice(record);
+                }}
+                className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-800 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-xs border border-slate-300 transition-all"
+              >
+                <Receipt className="h-4 w-4 text-emerald-700" />
+                <span>Generate Invoice</span>
+              </button>
+            )}
             <button
               onClick={handlePrint}
               className="px-4 py-2 bg-[#00E676] hover:bg-[#00c864] text-slate-950 rounded-xl text-xs font-black flex items-center space-x-1.5 shadow-xs border border-emerald-400 transition-all"

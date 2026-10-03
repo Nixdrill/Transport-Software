@@ -26,10 +26,13 @@ import { DispatchForm } from './components/DispatchForm';
 import { DispatchesList } from './components/DispatchesList';
 import { LRLookupModal } from './components/LRLookupModal';
 import { DashboardView } from './components/DashboardView';
+import { MastersView } from './components/MastersView';
+import { BillingView } from './components/BillingView';
 import { SettingsView } from './components/SettingsView';
 import { PrintDispatchModal } from './components/PrintDispatchModal';
+import { InvoiceBuilderModal } from './components/InvoiceBuilderModal';
+import { InvoicePrintModal } from './components/InvoicePrintModal';
 import { AuthModal } from './components/AuthModal';
-import { MastersView } from './components/MastersView';
 import { CheckCircle2, AlertCircle, RefreshCw, X, Sparkles } from 'lucide-react';
 import { generateSafeId } from './lib/calculations';
 import { 
@@ -40,7 +43,13 @@ import {
   clearAllMasters,
   resetMastersToDefaults
 } from './lib/mastersService';
+import { 
+  getInvoices, 
+  saveInvoices, 
+  saveInvoice 
+} from './lib/invoiceService';
 import { AllMasters } from './types/masters';
+import { FreightInvoice } from './types/invoice';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -53,12 +62,17 @@ export default function App() {
   const [activeTheme, setActiveTheme] = useState<string>(getSavedTheme());
   
   // Navigation & View
-  const [activeTab, setActiveTab] = useState<'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'settings'>('list');
+  const [activeTab, setActiveTab] = useState<'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'billing' | 'settings'>('list');
   const [records, setRecords] = useState<DispatchRecord[]>([]);
   const [editingRecord, setEditingRecord] = useState<DispatchRecord | null>(null);
   const [printRecord, setPrintRecord] = useState<DispatchRecord | null>(null);
   const [placementFilter, setPlacementFilter] = useState<'All' | 'Market' | 'Own'>('All');
   const [targetTransporterFilter, setTargetTransporterFilter] = useState<string>('');
+
+  // Invoice Creation from Dispatch Modal State
+  const [invoiceBuilderDispatch, setInvoiceBuilderDispatch] = useState<DispatchRecord | null>(null);
+  const [isDirectInvoiceBuilderOpen, setIsDirectInvoiceBuilderOpen] = useState<boolean>(false);
+  const [quickPrintInvoice, setQuickPrintInvoice] = useState<FreightInvoice | null>(null);
 
   // Flash Notifications
   const [notification, setNotification] = useState<{
@@ -118,20 +132,22 @@ export default function App() {
       saveLocalDispatches(samples);
       setRecords(samples);
     }
+
+    // Auto-sync initial dispatches to masters on first load
+    batchSyncDispatchesToMasters(local.length > 0 ? local : getSampleDispatches());
+
+    // Update pending queue count
     updatePendingCount();
-  }, []);
 
-  // 3. Network connectivity listener
-  useEffect(() => {
-    const handleOnline = async () => {
+    // Online / Offline listeners
+    const handleOnline = () => {
       setIsOnline(true);
-      showNotification('Internet connection restored. Synchronizing data...', 'info');
-      await syncWithCloud();
+      showNotification('Network connected! Online mode enabled.', 'info');
+      syncWithCloud();
     };
-
     const handleOffline = () => {
       setIsOnline(false);
-      showNotification('Working offline. All changes safely stored locally.', 'info');
+      showNotification('Working offline. Records will be saved locally.', 'info');
     };
 
     window.addEventListener('online', handleOnline);
@@ -141,8 +157,9 @@ export default function App() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [user, appUser]);
+  }, []);
 
+  // Update offline sync queue count
   const updatePendingCount = () => {
     const queue = getSyncQueue();
     setPendingCount(queue.length);
@@ -245,25 +262,47 @@ export default function App() {
     showNotification('Duplicated dispatch loaded into entry form.', 'info');
   };
 
+  // Quick Generate Invoice from Dispatch
+  const handleGenerateInvoiceForDispatch = (dsp: DispatchRecord) => {
+    setInvoiceBuilderDispatch(dsp);
+    setIsDirectInvoiceBuilderOpen(true);
+  };
+
+  const handleSaveDirectInvoice = (inv: FreightInvoice, autoPrint: boolean = false) => {
+    saveInvoice(inv);
+    setIsDirectInvoiceBuilderOpen(false);
+    setInvoiceBuilderDispatch(null);
+    showNotification(`Freight Invoice ${inv.invoiceNumber} created and saved to Billing!`, 'success');
+
+    if (autoPrint) {
+      setQuickPrintInvoice(inv);
+    } else {
+      setActiveTab('billing');
+    }
+  };
+
   // Load sample dataset
   const handleLoadSampleData = () => {
     const samples = getSampleDispatches();
     saveLocalDispatches(samples);
     setRecords(samples);
-    showNotification('Sample transport & LR records loaded successfully.', 'success');
+    batchSyncDispatchesToMasters(samples);
+    updatePendingCount();
+    showNotification('Sample demo fleet dispatches and multiple LRs loaded!', 'success');
   };
 
-  // Authentication Handlers
-  const handleAuthSuccess = (loggedUser: AppUser) => {
-    setAppUser(loggedUser);
-    showNotification(`Signed in as ${loggedUser.displayName || loggedUser.username} (${loggedUser.role})`, 'success');
+  // Auth Modal handlers
+  const handleAuthSuccess = (authenticatedUser: AppUser) => {
+    setAppUser(authenticatedUser);
+    showNotification(`Signed in as ${authenticatedUser.displayName} (${authenticatedUser.role})`, 'success');
     syncWithCloud();
   };
 
   const handleSignOut = async () => {
-    await logoutUser();
-    setUser(null);
+    logoutUser();
+    await signOutUser();
     setAppUser(null);
+    setUser(null);
     showNotification('Signed out successfully.', 'info');
   };
 
@@ -277,6 +316,7 @@ export default function App() {
 
   const handleBackupData = () => {
     const currentMasters = getMasters();
+    const currentInvoices = getInvoices();
     const totalMastersCount =
       currentMasters.parties.length +
       currentMasters.vehicles.length +
@@ -292,8 +332,10 @@ export default function App() {
       exportedBy: appUser?.username || user?.email || 'operator',
       totalDispatchesCount: records.length,
       totalMastersCount,
+      totalInvoicesCount: currentInvoices.length,
       dispatches: records,
       masters: currentMasters,
+      invoices: currentInvoices,
       settings: {
         activeTheme,
       },
@@ -308,7 +350,7 @@ export default function App() {
     document.body.removeChild(downloadAnchor);
 
     showNotification(
-      `Complete JSON backup with ${records.length} dispatches and ${totalMastersCount} master records downloaded!`,
+      `Complete JSON backup with ${records.length} dispatches, ${totalMastersCount} master records, and ${currentInvoices.length} invoices downloaded!`,
       'success'
     );
   };
@@ -316,7 +358,8 @@ export default function App() {
   const handleRestoreData = async (
     restoredRecords: DispatchRecord[], 
     mode: 'replace' | 'merge',
-    restoredMasters?: AllMasters
+    restoredMasters?: AllMasters,
+    restoredInvoices?: FreightInvoice[]
   ) => {
     try {
       let finalRecords: DispatchRecord[] = [];
@@ -349,6 +392,21 @@ export default function App() {
         masterNote = ` and ${count} Master records`;
       }
 
+      // If backup includes invoices, restore invoices
+      let invoiceNote = '';
+      if (restoredInvoices && restoredInvoices.length > 0) {
+        if (mode === 'replace') {
+          saveInvoices(restoredInvoices);
+        } else {
+          const existingInv = getInvoices();
+          const invMap = new Map<string, FreightInvoice>();
+          for (const inv of existingInv) invMap.set(inv.id, inv);
+          for (const inv of restoredInvoices) invMap.set(inv.id, inv);
+          saveInvoices(Array.from(invMap.values()));
+        }
+        invoiceNote = ` and ${restoredInvoices.length} Invoices`;
+      }
+
       // Also auto-sync restored dispatches into masters
       batchSyncDispatchesToMasters(restoredRecords);
 
@@ -358,7 +416,7 @@ export default function App() {
       }
 
       showNotification(
-        `Successfully restored ${restoredRecords.length} records${masterNote} via ${mode === 'replace' ? 'complete overwrite & replacement' : 'safe merge'}!`,
+        `Successfully restored ${restoredRecords.length} records${masterNote}${invoiceNote} via ${mode === 'replace' ? 'complete overwrite & replacement' : 'safe merge'}!`,
         'success'
       );
     } catch (err: any) {
@@ -419,7 +477,8 @@ export default function App() {
   const handleDeleteAllWithMasters = async () => {
     await handleDeleteAllData();
     clearAllMasters();
-    showNotification('Total Factory Reset completed: All Dispatches and Master records purged.', 'info');
+    saveInvoices([]);
+    showNotification('Total Factory Reset completed: All Dispatches, Masters, and Invoices purged.', 'info');
   };
 
   const handleClearLocalCache = () => {
@@ -448,49 +507,26 @@ export default function App() {
       }
       saveLocalDispatches(updated);
       setRecords(updated);
+      batchSyncDispatchesToMasters(newDispatches);
       updatePendingCount();
-      const totalLRs = newDispatches.reduce((s, d) => s + (d.lrs?.length || 0), 0);
-      showNotification(
-        `Successfully imported ${newDispatches.length} dispatch trips (${totalLRs} LRs) from Excel with duplicate protection!`,
-        'success'
-      );
-      if (isOnline) {
-        syncWithCloud();
-      }
+      showNotification(`Imported ${newDispatches.length} dispatch records from Excel!`, 'success');
     } catch (err: any) {
-      showNotification(err?.message || 'Failed to import Excel records.', 'error');
+      showNotification(err?.message || 'Failed to import Excel data.', 'error');
     }
   };
 
-  // Find theme styles
+  // Lookups for Autocomplete in Form
+  const existingParties = Array.from(new Set(records.map((r) => r.fromParty).concat(records.map((r) => r.toParty)).filter(Boolean)));
+  const existingTransporters = Array.from(new Set(records.map((r) => r.transporterName).filter(Boolean)));
+
   const currentTheme = AVAILABLE_THEMES.find((t) => t.id === activeTheme) || AVAILABLE_THEMES[0];
 
-  // Extract distinct parties & transporters for autocomplete
-  const existingParties = Array.from(
-    new Set(
-      records.flatMap((r) => [
-        r.fromParty,
-        r.toParty,
-        ...(r.lrs || []).flatMap((lr) => [lr.consignorName, lr.consigneeName]),
-      ])
-    )
-  ).filter(Boolean);
-
-  const existingTransporters = Array.from(
-    new Set(records.map((r) => r.transporterName))
-  ).filter(Boolean);
-
   return (
-    <div className={`min-h-screen ${currentTheme.bgClass} flex flex-col font-sans antialiased transition-colors duration-300 selection:bg-[#00E676] selection:text-slate-950`}>
-      {/* Header with Connectivity, Sync, & User Authentication */}
+    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 ${currentTheme.bgClass}`}>
+      {/* Universal Top Header with Sync, Connectivity & Navigation */}
       <Header
         activeTab={activeTab}
-        setActiveTab={(tab) => {
-          if (tab === 'form' && activeTab !== 'form') {
-            setEditingRecord(null);
-          }
-          setActiveTab(tab);
-        }}
+        setActiveTab={setActiveTab}
         isOnline={isOnline}
         isSyncing={isSyncing}
         pendingCount={pendingCount}
@@ -577,6 +613,7 @@ export default function App() {
             onDelete={handleDeleteDispatch}
             onDuplicate={handleDuplicateDispatch}
             onPrint={(rec) => setPrintRecord(rec)}
+            onGenerateInvoice={handleGenerateInvoiceForDispatch}
             onNewEntry={() => {
               setEditingRecord(null);
               setActiveTab('form');
@@ -616,7 +653,7 @@ export default function App() {
           />
         )}
 
-        {/* TAB 5: Masters Data Center (Auto-fill, Automations & Gemini AI Corridor Benchmark) */}
+        {/* TAB 5: Masters Data Center */}
         {activeTab === 'masters' && (
           <MastersView
             dispatches={records}
@@ -624,7 +661,16 @@ export default function App() {
           />
         )}
 
-        {/* TAB 6: Settings, Data Backup, Restore, Delete & Theme Picker */}
+        {/* TAB 6: Invoices & Billing Management Center */}
+        {activeTab === 'billing' && (
+          <BillingView
+            dispatches={records}
+            showNotification={showNotification}
+            onNavigateToDispatches={() => setActiveTab('list')}
+          />
+        )}
+
+        {/* TAB 7: Settings, Data Backup, Restore, Delete & Theme Picker */}
         {activeTab === 'settings' && (
           <SettingsView
             records={records}
@@ -656,17 +702,36 @@ export default function App() {
         <PrintDispatchModal
           record={printRecord}
           onClose={() => setPrintRecord(null)}
+          onGenerateInvoice={handleGenerateInvoiceForDispatch}
         />
       )}
+
+      {/* Quick Direct Invoice Builder Modal (triggered from Dispatches list / Print Slip) */}
+      <InvoiceBuilderModal
+        isOpen={isDirectInvoiceBuilderOpen}
+        onClose={() => {
+          setIsDirectInvoiceBuilderOpen(false);
+          setInvoiceBuilderDispatch(null);
+        }}
+        onSave={handleSaveDirectInvoice}
+        initialDispatch={invoiceBuilderDispatch}
+        allDispatches={records}
+      />
+
+      {/* Quick Print Modal for freshly generated invoice */}
+      <InvoicePrintModal
+        invoice={quickPrintInvoice}
+        onClose={() => setQuickPrintInvoice(null)}
+      />
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950/80 py-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>LogiTrack Enterprise • Logistics, Multi-LR & Fleet Management</span>
+          <span>LogiTrack Enterprise • Logistics, Multi-LR, Fleet Billing & Invoicing</span>
           <div className="flex items-center space-x-3 text-slate-400">
             <span>Theme: <strong className="text-white capitalize">{currentTheme.name}</strong></span>
             <span>•</span>
-            <span>Cloud Database Persistent Storage</span>
+            <span>GST SAC 996511 Compliant</span>
           </div>
         </div>
       </footer>
