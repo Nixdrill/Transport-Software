@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { DispatchRecord, LRItem } from '../types/dispatch';
+import { DispatchRecord, LRItem, DispatchStatus } from '../types/dispatch';
 import { formatCurrency } from '../lib/calculations';
 import { exportToExcel, downloadExcelTemplate } from '../lib/excelService';
 import { ExcelImportModal } from './ExcelImportModal';
@@ -30,7 +30,12 @@ import {
   Building2,
   Hash,
   Sparkles,
-  Receipt
+  Receipt,
+  Check,
+  CheckSquare,
+  Square,
+  Layers,
+  CheckCheck
 } from 'lucide-react';
 
 interface DispatchesListProps {
@@ -40,6 +45,7 @@ interface DispatchesListProps {
   onDuplicate: (record: DispatchRecord) => void;
   onPrint: (record: DispatchRecord) => void;
   onGenerateInvoice?: (record: DispatchRecord) => void;
+  onBatchGenerateInvoice?: (records: DispatchRecord[]) => void;
   onNewEntry: () => void;
   onLoadSampleData: () => void;
   onImportExcel?: (dispatches: DispatchRecord[]) => void;
@@ -55,6 +61,7 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
   onDuplicate,
   onPrint,
   onGenerateInvoice,
+  onBatchGenerateInvoice,
   onNewEntry,
   onLoadSampleData,
   onImportExcel,
@@ -62,6 +69,9 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
   initialPlacementFilter,
   onGoToDashboardAudit,
 }) => {
+  // Single & Multi-Selection States
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
   // Search & Filter States
   const [keywordQuery, setKeywordQuery] = useState('');
   const [filterStartDate, setFilterStartDate] = useState('');
@@ -255,6 +265,81 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
 
   const toggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
+  };
+
+  // Selection Handlers
+  const handleToggleSelect = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const isAllFilteredSelected = filteredRecords.length > 0 && filteredRecords.every((r) => selectedIds.includes(r.id));
+  const isSomeFilteredSelected = filteredRecords.some((r) => selectedIds.includes(r.id));
+
+  const handleSelectAllFiltered = () => {
+    const filteredIds = filteredRecords.map((r) => r.id);
+    setSelectedIds((prev) => {
+      const allSelected = filteredIds.every((id) => prev.includes(id));
+      if (allSelected) {
+        return prev.filter((id) => !filteredIds.includes(id));
+      } else {
+        return Array.from(new Set([...prev, ...filteredIds]));
+      }
+    });
+  };
+
+  const handleSelectAllRecords = () => {
+    setSelectedIds(records.map((r) => r.id));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds([]);
+  };
+
+  const handleInvertSelection = () => {
+    const currentFilteredIds = filteredRecords.map((r) => r.id);
+    setSelectedIds((prev) => {
+      const remaining = prev.filter((id) => !currentFilteredIds.includes(id));
+      const newlySelected = currentFilteredIds.filter((id) => !prev.includes(id));
+      return [...remaining, ...newlySelected];
+    });
+  };
+
+  const selectedRecords = useMemo(() => {
+    return records.filter((r) => selectedIds.includes(r.id));
+  }, [records, selectedIds]);
+
+  const selectedStats = useMemo(() => {
+    const count = selectedRecords.length;
+    const lrsCount = selectedRecords.reduce((s, r) => s + (r.totalLrsCount || r.lrs?.length || 0), 0);
+    const weight = selectedRecords.reduce((s, r) => s + (Number(r.totalWeight) || 0), 0);
+    const freight = selectedRecords.reduce((s, r) => s + (Number(r.totalFreightAmount) || 0), 0);
+    return { count, lrsCount, weight: Number(weight.toFixed(3)), freight };
+  }, [selectedRecords]);
+
+  // Batch action executions
+  const handleBatchDelete = () => {
+    if (selectedRecords.length === 0) return;
+    if (confirm(`Are you sure you want to permanently delete all ${selectedRecords.length} selected dispatch records?`)) {
+      selectedIds.forEach((id) => onDelete(id));
+      handleClearSelection();
+    }
+  };
+
+  const handleBatchExportExcel = () => {
+    if (selectedRecords.length === 0) return;
+    exportToExcel(selectedRecords);
+  };
+
+  const handleBatchGenerateInvoice = () => {
+    if (selectedRecords.length === 0) return;
+    if (onBatchGenerateInvoice) {
+      onBatchGenerateInvoice(selectedRecords);
+    } else if (onGenerateInvoice) {
+      onGenerateInvoice(selectedRecords[0]);
+    }
   };
 
   // CSV Export
@@ -716,15 +801,84 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
         )}
       </div>
 
-      {/* Results Count & Quick Stats Bar */}
+      {/* Results Count, Selection Controls & Quick Stats Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 px-1 font-medium">
-        <div>
-          Showing <span className="text-slate-950 font-black">{filteredRecords.length}</span> of{' '}
-          <span className="text-slate-950 font-black">{records.length}</span> dispatches
-          {hasActiveFilters && (
-            <span className="text-emerald-700 font-bold ml-1.5">(Filtered)</span>
+        <div className="flex items-center space-x-3 flex-wrap gap-y-1">
+          {/* Main Select All Filtered Checkbox */}
+          {filteredRecords.length > 0 && (
+            <div className="flex items-center space-x-2 bg-white px-2.5 py-1 rounded-lg border border-slate-300 shadow-xs">
+              <label className="flex items-center space-x-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isAllFilteredSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = isSomeFilteredSelected && !isAllFilteredSelected;
+                  }}
+                  onChange={handleSelectAllFiltered}
+                  className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                />
+                <span className="font-bold text-slate-900 text-xs">
+                  {isAllFilteredSelected ? 'Deselect All' : 'Select All Filtered'}
+                </span>
+              </label>
+            </div>
           )}
+
+          <div>
+            Showing <span className="text-slate-950 font-black">{filteredRecords.length}</span> of{' '}
+            <span className="text-slate-950 font-black">{records.length}</span> dispatches
+            {hasActiveFilters && (
+              <span className="text-emerald-700 font-bold ml-1.5">(Filtered)</span>
+            )}
+          </div>
         </div>
+
+        {/* Multi-Selection Fast Action Buttons */}
+        {filteredRecords.length > 0 && (
+          <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+            <button
+              type="button"
+              onClick={handleSelectAllFiltered}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors flex items-center space-x-1 ${
+                isAllFilteredSelected
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+              }`}
+            >
+              <CheckCheck className="h-3 w-3" />
+              <span>{isAllFilteredSelected ? 'Deselect Visible' : `Select All Visible (${filteredRecords.length})`}</span>
+            </button>
+
+            {records.length > filteredRecords.length && (
+              <button
+                type="button"
+                onClick={handleSelectAllRecords}
+                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-bold transition-colors"
+              >
+                Select All {records.length}
+              </button>
+            )}
+
+            {selectedIds.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleInvertSelection}
+                  className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded-lg text-[11px] font-medium"
+                >
+                  Invert
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearSelection}
+                  className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[11px] font-bold"
+                >
+                  Clear ({selectedIds.length})
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         {records.length === 0 && (
           <button
@@ -735,6 +889,78 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
           </button>
         )}
       </div>
+
+      {/* FLOATING / STICKY BATCH ACTIONS BAR (when items are selected) */}
+      {selectedIds.length > 0 && (
+        <div className="sticky top-20 z-20 bg-slate-950 text-white rounded-2xl p-3 sm:p-4 shadow-xl border border-emerald-500/40 animate-in fade-in slide-in-from-top-3 duration-150">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            {/* Selection Stats */}
+            <div className="flex items-center space-x-3">
+              <div className="h-8 w-8 rounded-xl bg-emerald-500/20 text-[#00E676] flex items-center justify-center font-mono font-black text-sm border border-emerald-500/40">
+                {selectedStats.count}
+              </div>
+              <div>
+                <div className="font-black text-white text-xs flex items-center space-x-1.5">
+                  <span>{selectedStats.count} Dispatches Selected</span>
+                  <span>•</span>
+                  <span className="text-emerald-400 font-mono">{selectedStats.lrsCount} LRs</span>
+                  <span>•</span>
+                  <span className="text-amber-400 font-mono">{selectedStats.weight} MT</span>
+                </div>
+                <div className="text-[11px] text-slate-400 font-mono">
+                  Total Freight Turnover: <strong className="text-[#00E676]">{formatCurrency(selectedStats.freight)}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Batch Action Buttons */}
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1.5">
+              {/* Generate Consolidated Invoice */}
+              <button
+                type="button"
+                onClick={handleBatchGenerateInvoice}
+                className="px-3.5 py-1.5 bg-[#00E676] hover:bg-[#00c864] text-slate-950 rounded-xl text-xs font-black flex items-center space-x-1.5 shadow-xs border border-emerald-400 transition-all"
+                title="Generate Consolidated Freight Invoice for Selected Trips"
+              >
+                <Receipt className="h-4 w-4 text-slate-950" />
+                <span>Consolidated Bill ({selectedStats.count})</span>
+              </button>
+
+              {/* Export Selected to Excel */}
+              <button
+                type="button"
+                onClick={handleBatchExportExcel}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 border border-slate-700 transition-colors"
+                title="Export Selected to Excel (.xlsx)"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Export Selected</span>
+              </button>
+
+              {/* Batch Delete */}
+              <button
+                type="button"
+                onClick={handleBatchDelete}
+                className="px-3 py-1.5 bg-rose-600/30 hover:bg-rose-600 text-rose-300 hover:text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 border border-rose-500/40 transition-colors"
+                title="Delete Selected Dispatches"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Delete ({selectedStats.count})</span>
+              </button>
+
+              {/* Clear Selection */}
+              <button
+                type="button"
+                onClick={handleClearSelection}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+                title="Deselect All"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 4. FILTERED RECORDS TABLE / CARDS */}
       {filteredRecords.length === 0 ? (
@@ -783,11 +1009,16 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
         <div className="space-y-3.5">
           {filteredRecords.map((dsp) => {
             const isExpanded = expandedId === dsp.id;
+            const isSelected = selectedIds.includes(dsp.id);
 
             return (
               <div
                 key={dsp.id}
-                className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-xs hover:border-slate-300 hover:shadow-sm transition-all"
+                className={`bg-white border rounded-2xl overflow-hidden shadow-xs hover:shadow-sm transition-all ${
+                  isSelected
+                    ? 'border-emerald-500 bg-emerald-50/20 ring-2 ring-emerald-300/80'
+                    : 'border-slate-200/90 hover:border-slate-300'
+                }`}
               >
                 {/* Main Card Header / Summary Row */}
                 <div
@@ -795,8 +1026,25 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                   onClick={() => toggleExpand(dsp.id)}
                 >
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                    {/* Left: Date, Vehicle, Transporter & Route */}
+                    {/* Left: Checkbox, Date, Vehicle, Transporter & Route */}
                     <div className="flex items-start space-x-3">
+                      {/* Checkbox for Single / Multi-Selection */}
+                      <div
+                        className="mt-2 flex-shrink-0"
+                        onClick={(e) => handleToggleSelect(dsp.id, e)}
+                      >
+                        <div
+                          className={`h-5 w-5 rounded-md border flex items-center justify-center transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#00E676] border-emerald-500 text-slate-950 shadow-xs'
+                              : 'bg-white border-slate-300 hover:border-slate-400'
+                          }`}
+                          title={isSelected ? 'Deselect trip' : 'Select trip'}
+                        >
+                          {isSelected && <Check className="h-3.5 w-3.5 stroke-[3]" />}
+                        </div>
+                      </div>
+
                       <div className="mt-0.5">
                         <div className="h-10 w-10 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center border border-slate-200">
                           <Truck className="h-5 w-5 text-slate-900" />

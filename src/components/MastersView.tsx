@@ -50,7 +50,10 @@ import {
   CheckCircle2,
   FileJson,
   Layers,
-  Copy
+  Copy,
+  CheckCheck,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 
 interface MastersViewProps {
@@ -69,6 +72,9 @@ export const MastersView: React.FC<MastersViewProps> = ({
   const [masters, setMasters] = useState<AllMasters>(() => getMasters());
   const [activeCategory, setActiveCategory] = useState<MasterCategory>('parties');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Single & Multi-Selection for Master items
+  const [selectedMasterIds, setSelectedMasterIds] = useState<string[]>([]);
 
   // Modal State for Add / Edit
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -405,6 +411,112 @@ export const MastersView: React.FC<MastersViewProps> = ({
     );
   }, [masters.commodities, searchQuery]);
 
+  // Active Category Items & Selection Logic
+  const currentVisibleItems = useMemo(() => {
+    switch (activeCategory) {
+      case 'parties': return filteredParties;
+      case 'vehicles': return filteredVehicles;
+      case 'transporters': return filteredTransporters;
+      case 'routes': return filteredRoutes;
+      case 'drivers': return filteredDrivers;
+      case 'commodities': return filteredCommodities;
+      default: return [];
+    }
+  }, [activeCategory, filteredParties, filteredVehicles, filteredTransporters, filteredRoutes, filteredDrivers, filteredCommodities]);
+
+  const currentAllCategoryItems = useMemo(() => {
+    return masters[activeCategory] || [];
+  }, [masters, activeCategory]);
+
+  const isAllVisibleSelected = currentVisibleItems.length > 0 && currentVisibleItems.every((item) => selectedMasterIds.includes(item.id));
+  const isSomeVisibleSelected = currentVisibleItems.some((item) => selectedMasterIds.includes(item.id));
+
+  const handleToggleSelectMaster = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedMasterIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllVisible = () => {
+    const visibleIds = currentVisibleItems.map((i) => i.id);
+    setSelectedMasterIds((prev) => {
+      const allSelected = visibleIds.every((id) => prev.includes(id));
+      if (allSelected) {
+        return prev.filter((id) => !visibleIds.includes(id));
+      } else {
+        return Array.from(new Set([...prev, ...visibleIds]));
+      }
+    });
+  };
+
+  const handleSelectAllCategory = () => {
+    setSelectedMasterIds(currentAllCategoryItems.map((i) => i.id));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedMasterIds([]);
+  };
+
+  const handleInvertSelection = () => {
+    const visibleIds = currentVisibleItems.map((i) => i.id);
+    setSelectedMasterIds((prev) => {
+      const remaining = prev.filter((id) => !visibleIds.includes(id));
+      const newlySelected = visibleIds.filter((id) => !prev.includes(id));
+      return [...remaining, ...newlySelected];
+    });
+  };
+
+  const handleBatchDeleteMasters = () => {
+    if (selectedMasterIds.length === 0) return;
+    if (!confirm(`Are you sure you want to permanently delete all ${selectedMasterIds.length} selected items from ${activeCategory}?`)) return;
+
+    const updated = { ...masters };
+    const idSet = new Set(selectedMasterIds);
+
+    if (activeCategory === 'parties') {
+      updated.parties = updated.parties.filter((p) => !idSet.has(p.id));
+    } else if (activeCategory === 'vehicles') {
+      updated.vehicles = updated.vehicles.filter((v) => !idSet.has(v.id));
+    } else if (activeCategory === 'transporters') {
+      updated.transporters = updated.transporters.filter((t) => !idSet.has(t.id));
+    } else if (activeCategory === 'routes') {
+      updated.routes = updated.routes.filter((r) => !idSet.has(r.id));
+    } else if (activeCategory === 'drivers') {
+      updated.drivers = updated.drivers.filter((d) => !idSet.has(d.id));
+    } else if (activeCategory === 'commodities') {
+      updated.commodities = updated.commodities.filter((c) => !idSet.has(c.id));
+    }
+
+    persistChanges(updated);
+    const count = selectedMasterIds.length;
+    setSelectedMasterIds([]);
+    showNotification(`Deleted ${count} items from ${activeCategory} master.`, 'info');
+  };
+
+  const handleBatchExportMastersJSON = () => {
+    if (selectedMasterIds.length === 0) return;
+    const idSet = new Set(selectedMasterIds);
+    const selectedItems = currentAllCategoryItems.filter((i) => idSet.has(i.id));
+
+    const payload = {
+      app: 'LogiTrack Transport Masters',
+      category: activeCategory,
+      count: selectedItems.length,
+      exportedAt: new Date().toISOString(),
+      items: selectedItems,
+    };
+
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `LogiTrack_${activeCategory}_Selected_${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    document.body.removeChild(downloadAnchor);
+    showNotification(`Exported ${selectedItems.length} selected ${activeCategory} to JSON.`, 'success');
+  };
+
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-200">
       {/* Header Banner */}
@@ -598,7 +710,7 @@ export const MastersView: React.FC<MastersViewProps> = ({
           {/* Subtabs */}
           <div className="flex space-x-1.5 overflow-x-auto">
             <button
-              onClick={() => { setActiveCategory('parties'); setSearchQuery(''); }}
+              onClick={() => { setActiveCategory('parties'); setSearchQuery(''); setSelectedMasterIds([]); }}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center space-x-1.5 ${
                 activeCategory === 'parties'
                   ? 'bg-emerald-500 text-slate-950 shadow-xs'
@@ -610,7 +722,7 @@ export const MastersView: React.FC<MastersViewProps> = ({
             </button>
 
             <button
-              onClick={() => { setActiveCategory('vehicles'); setSearchQuery(''); }}
+              onClick={() => { setActiveCategory('vehicles'); setSearchQuery(''); setSelectedMasterIds([]); }}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center space-x-1.5 ${
                 activeCategory === 'vehicles'
                   ? 'bg-amber-400 text-slate-950 shadow-xs'
@@ -622,7 +734,7 @@ export const MastersView: React.FC<MastersViewProps> = ({
             </button>
 
             <button
-              onClick={() => { setActiveCategory('transporters'); setSearchQuery(''); }}
+              onClick={() => { setActiveCategory('transporters'); setSearchQuery(''); setSelectedMasterIds([]); }}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center space-x-1.5 ${
                 activeCategory === 'transporters'
                   ? 'bg-indigo-500 text-white shadow-xs'
@@ -634,7 +746,7 @@ export const MastersView: React.FC<MastersViewProps> = ({
             </button>
 
             <button
-              onClick={() => { setActiveCategory('routes'); setSearchQuery(''); }}
+              onClick={() => { setActiveCategory('routes'); setSearchQuery(''); setSelectedMasterIds([]); }}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center space-x-1.5 ${
                 activeCategory === 'routes'
                   ? 'bg-sky-500 text-white shadow-xs'
@@ -646,7 +758,7 @@ export const MastersView: React.FC<MastersViewProps> = ({
             </button>
 
             <button
-              onClick={() => { setActiveCategory('drivers'); setSearchQuery(''); }}
+              onClick={() => { setActiveCategory('drivers'); setSearchQuery(''); setSelectedMasterIds([]); }}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center space-x-1.5 ${
                 activeCategory === 'drivers'
                   ? 'bg-teal-500 text-white shadow-xs'
@@ -658,7 +770,7 @@ export const MastersView: React.FC<MastersViewProps> = ({
             </button>
 
             <button
-              onClick={() => { setActiveCategory('commodities'); setSearchQuery(''); }}
+              onClick={() => { setActiveCategory('commodities'); setSearchQuery(''); setSelectedMasterIds([]); }}
               className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center space-x-1.5 ${
                 activeCategory === 'commodities'
                   ? 'bg-rose-500 text-white shadow-xs'
@@ -704,6 +816,145 @@ export const MastersView: React.FC<MastersViewProps> = ({
         </div>
       </div>
 
+      {/* SELECTION ACTION BAR & STATS STRIP */}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 px-1 font-medium">
+        <div className="flex items-center space-x-3 flex-wrap gap-y-1">
+          {/* Main Select All Filtered Checkbox */}
+          {currentVisibleItems.length > 0 && (
+            <div className="flex items-center space-x-2 bg-white px-2.5 py-1 rounded-lg border border-slate-300 shadow-xs">
+              <label className="flex items-center space-x-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isAllVisibleSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = isSomeVisibleSelected && !isAllVisibleSelected;
+                  }}
+                  onChange={handleSelectAllVisible}
+                  className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                />
+                <span className="font-bold text-slate-900 text-xs">
+                  {isAllVisibleSelected ? 'Deselect All' : `Select All Visible (${currentVisibleItems.length})`}
+                </span>
+              </label>
+            </div>
+          )}
+
+          <div>
+            Showing <span className="text-slate-950 font-black">{currentVisibleItems.length}</span> of{' '}
+            <span className="text-slate-950 font-black">{currentAllCategoryItems.length}</span> {activeCategory}
+            {searchQuery && (
+              <span className="text-emerald-700 font-bold ml-1.5">(Filtered)</span>
+            )}
+          </div>
+        </div>
+
+        {/* Multi-Selection Fast Action Buttons */}
+        {currentVisibleItems.length > 0 && (
+          <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+            <button
+              type="button"
+              onClick={handleSelectAllVisible}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors flex items-center space-x-1 ${
+                isAllVisibleSelected
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+              }`}
+            >
+              <CheckCheck className="h-3 w-3" />
+              <span>{isAllVisibleSelected ? 'Deselect Visible' : `Select All Visible (${currentVisibleItems.length})`}</span>
+            </button>
+
+            {currentAllCategoryItems.length > currentVisibleItems.length && (
+              <button
+                type="button"
+                onClick={handleSelectAllCategory}
+                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-bold transition-colors"
+              >
+                Select All {currentAllCategoryItems.length}
+              </button>
+            )}
+
+            {selectedMasterIds.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleInvertSelection}
+                  className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded-lg text-[11px] font-medium"
+                >
+                  Invert
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearSelection}
+                  className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[11px] font-bold"
+                >
+                  Clear ({selectedMasterIds.length})
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* FLOATING / STICKY BATCH ACTIONS BAR (when master items are selected) */}
+      {selectedMasterIds.length > 0 && (
+        <div className="sticky top-20 z-20 bg-slate-950 text-white rounded-2xl p-3 sm:p-4 shadow-xl border border-emerald-500/40 animate-in fade-in slide-in-from-top-3 duration-150">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            {/* Selection Stats */}
+            <div className="flex items-center space-x-3">
+              <div className="h-8 w-8 rounded-xl bg-emerald-500/20 text-[#00E676] flex items-center justify-center font-mono font-black text-sm border border-emerald-500/40">
+                {selectedMasterIds.length}
+              </div>
+              <div>
+                <div className="font-black text-white text-xs flex items-center space-x-1.5">
+                  <span>{selectedMasterIds.length} {activeCategory} Selected</span>
+                  <span>•</span>
+                  <span className="text-emerald-400 capitalize">{activeCategory} Master</span>
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  Perform batch actions or export selected master items
+                </div>
+              </div>
+            </div>
+
+            {/* Batch Action Buttons */}
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1.5">
+              {/* Batch Export Selected to JSON */}
+              <button
+                type="button"
+                onClick={handleBatchExportMastersJSON}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 border border-slate-700 transition-colors"
+                title="Export selected master records to JSON"
+              >
+                <Download className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Export Selected ({selectedMasterIds.length})</span>
+              </button>
+
+              {/* Batch Delete */}
+              <button
+                type="button"
+                onClick={handleBatchDeleteMasters}
+                className="px-3 py-1.5 bg-rose-600/30 hover:bg-rose-600 text-rose-300 hover:text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 border border-rose-500/40 transition-colors"
+                title="Delete Selected Masters"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Delete Selected ({selectedMasterIds.length})</span>
+              </button>
+
+              {/* Clear Selection */}
+              <button
+                type="button"
+                onClick={handleClearSelection}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+                title="Deselect All"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MASTER LIST TABLE / CARDS */}
       <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
         {/* CATEGORY 1: PARTIES */}
@@ -712,6 +963,17 @@ export const MastersView: React.FC<MastersViewProps> = ({
             <table className="w-full text-left text-xs">
               <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-600 font-extrabold uppercase tracking-wider text-[11px]">
                 <tr>
+                  <th className="py-3 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllVisibleSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isSomeVisibleSelected && !isAllVisibleSelected;
+                      }}
+                      onChange={handleSelectAllVisible}
+                      className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                    />
+                  </th>
                   <th className="py-3 px-4 min-w-[180px]">Party Name & Role</th>
                   <th className="py-3 px-4 min-w-[160px]">GSTIN & PAN Details</th>
                   <th className="py-3 px-4 min-w-[220px]">Facility / Billing Address (Wrap Text)</th>
@@ -725,7 +987,7 @@ export const MastersView: React.FC<MastersViewProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {filteredParties.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
+                    <td colSpan={9} className="py-12 text-center text-slate-500 font-medium">
                       No parties match your search query.
                     </td>
                   </tr>
@@ -734,24 +996,75 @@ export const MastersView: React.FC<MastersViewProps> = ({
                     const derivedPan = extractPanFromGstin(pty.gstin);
                     const effectivePan = pty.panNumber || derivedPan;
                     const isAutoPan = derivedPan && effectivePan === derivedPan;
+                    const isSelected = selectedMasterIds.includes(pty.id);
 
                     return (
-                      <tr key={pty.id} className="hover:bg-slate-50/80 transition-colors align-top">
-                        {/* Party Name & Role */}
+                      <tr 
+                        key={pty.id} 
+                        className={`transition-colors align-top ${
+                          isSelected ? 'bg-emerald-50/60 hover:bg-emerald-50/90' : 'hover:bg-slate-50/80'
+                        }`}
+                      >
+                        {/* Checkbox Column */}
+                        <td className="py-3 px-3 text-center align-middle">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleToggleSelectMaster(pty.id, e as any)}
+                            className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                          />
+                        </td>
+
+                        {/* Party Name & Role with Logo */}
                         <td className="py-3 px-4">
-                          <div className="font-black text-slate-950 text-sm">
-                            {pty.name}
-                          </div>
-                          <div className="mt-1">
-                            <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase tracking-wider ${
-                              pty.type === 'Consignor'
-                                ? 'bg-emerald-100 text-emerald-950 border border-emerald-300'
-                                : pty.type === 'Consignee'
-                                ? 'bg-sky-100 text-sky-950 border border-sky-300'
-                                : 'bg-purple-100 text-purple-950 border border-purple-300'
-                            }`}>
-                              {pty.type}
-                            </span>
+                          <div className="flex items-start space-x-3">
+                            {/* Logo Thumbnail or Avatar Badge */}
+                            <div className="flex-shrink-0 mt-0.5">
+                              {pty.logoUrl ? (
+                                <img
+                                  src={pty.logoUrl}
+                                  alt={`${pty.name} Logo`}
+                                  className="h-10 w-10 object-contain rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs"
+                                />
+                              ) : (
+                                <div className={`h-10 w-10 rounded-lg flex items-center justify-center font-bold text-xs border ${
+                                  pty.type === 'Billing Party (Issuer)'
+                                    ? 'bg-emerald-500/20 text-emerald-950 border-emerald-400'
+                                    : 'bg-slate-100 text-slate-600 border-slate-200'
+                                }`}>
+                                  <Building2 className="h-5 w-5 text-slate-500" />
+                                </div>
+                              )}
+                            </div>
+
+                            <div>
+                              <div className="font-black text-slate-950 text-sm leading-tight">
+                                {pty.name}
+                              </div>
+                              {pty.tagline && (
+                                <div className="text-[10px] text-slate-500 italic mt-0.5 font-medium line-clamp-1 max-w-xs">
+                                  {pty.tagline}
+                                </div>
+                              )}
+                              <div className="mt-1 flex items-center space-x-1 flex-wrap gap-y-1">
+                                <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase tracking-wider ${
+                                  pty.type === 'Billing Party (Issuer)'
+                                    ? 'bg-[#00E676] text-slate-950 border border-emerald-400 font-black shadow-2xs'
+                                    : pty.type === 'Consignor'
+                                    ? 'bg-emerald-100 text-emerald-950 border border-emerald-300'
+                                    : pty.type === 'Consignee'
+                                    ? 'bg-sky-100 text-sky-950 border border-sky-300'
+                                    : 'bg-purple-100 text-purple-950 border border-purple-300'
+                                }`}>
+                                  {pty.type === 'Billing Party (Issuer)' ? '★ Billing Party (Issuer)' : pty.type}
+                                </span>
+                                {pty.cinNumber && (
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[9px] font-semibold border border-slate-200">
+                                    CIN: {pty.cinNumber}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </td>
 
@@ -890,6 +1203,17 @@ export const MastersView: React.FC<MastersViewProps> = ({
             <table className="w-full text-left text-xs">
               <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-600 font-extrabold uppercase tracking-wider text-[11px]">
                 <tr>
+                  <th className="py-3 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllVisibleSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isSomeVisibleSelected && !isAllVisibleSelected;
+                      }}
+                      onChange={handleSelectAllVisible}
+                      className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                    />
+                  </th>
                   <th className="py-3 px-4">Vehicle Number</th>
                   <th className="py-3 px-4">Placement</th>
                   <th className="py-3 px-4">Type & Capacity</th>
@@ -902,74 +1226,91 @@ export const MastersView: React.FC<MastersViewProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {filteredVehicles.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-500 font-medium">
+                    <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
                       No vehicles match your search query.
                     </td>
                   </tr>
                 ) : (
-                  filteredVehicles.map((veh) => (
-                    <tr key={veh.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4">
-                        <span className="font-mono font-black text-slate-950 text-sm tracking-wide bg-slate-100 px-2 py-1 rounded border border-slate-300">
-                          {veh.vehicleNumber}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase tracking-wider ${
-                          veh.placement === 'Market'
-                            ? 'bg-[#FFB700] text-stone-950 border border-amber-500'
-                            : 'bg-[#00E676] text-slate-950 border border-emerald-500'
-                        }`}>
-                          {veh.placement}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-black text-slate-900">{veh.vehicleType}</div>
-                        <div className="text-slate-500 font-bold font-mono text-[11px]">
-                          Capacity: {veh.capacityMT} MT
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-slate-800">
-                        {veh.transporterName || '-'}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-slate-900">{veh.driverName || '-'}</div>
-                        <div className="text-slate-500 font-mono text-[11px]">{veh.driverPhone || '-'}</div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="inline-flex items-center space-x-1 text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-[11px] font-bold">
-                          <Check className="h-3 w-3" />
-                          <span>{veh.status}</span>
-                        </span>
-                        {veh.fitnessExpiry && (
-                          <div className="text-[10px] text-slate-500 mt-0.5">
-                            Fit exp: {veh.fitnessExpiry}
+                  filteredVehicles.map((veh) => {
+                    const isSelected = selectedMasterIds.includes(veh.id);
+
+                    return (
+                      <tr 
+                        key={veh.id} 
+                        className={`transition-colors ${
+                          isSelected ? 'bg-amber-50/60 hover:bg-amber-50/90' : 'hover:bg-slate-50/80'
+                        }`}
+                      >
+                        <td className="py-3 px-3 text-center align-middle">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleToggleSelectMaster(veh.id, e as any)}
+                            className="h-4 w-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer"
+                          />
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="font-mono font-black text-slate-950 text-sm tracking-wide bg-slate-100 px-2 py-1 rounded border border-slate-300">
+                            {veh.vehicleNumber}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase tracking-wider ${
+                            veh.placement === 'Market'
+                              ? 'bg-[#FFB700] text-stone-950 border border-amber-500'
+                              : 'bg-[#00E676] text-slate-950 border border-emerald-500'
+                          }`}>
+                            {veh.placement}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-black text-slate-900">{veh.vehicleType}</div>
+                          <div className="text-slate-500 font-bold font-mono text-[11px]">
+                            Capacity: {veh.capacityMT} MT
                           </div>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end space-x-1">
-                          <button
-                            onClick={() => {
-                              setEditingItem(veh);
-                              setIsModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg text-indigo-700 hover:bg-indigo-50"
-                            title="Edit Vehicle"
-                          >
-                            <Edit3 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteItem(veh.id, veh.vehicleNumber)}
-                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
-                            title="Delete Vehicle"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-slate-800">
+                          {veh.transporterName || '-'}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-slate-900">{veh.driverName || '-'}</div>
+                          <div className="text-slate-500 font-mono text-[11px]">{veh.driverPhone || '-'}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center space-x-1 text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded text-[11px] font-bold">
+                            <Check className="h-3 w-3" />
+                            <span>{veh.status}</span>
+                          </span>
+                          {veh.fitnessExpiry && (
+                            <div className="text-[10px] text-slate-500 mt-0.5">
+                              Fit exp: {veh.fitnessExpiry}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end space-x-1">
+                            <button
+                              onClick={() => {
+                                setEditingItem(veh);
+                                setIsModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg text-indigo-700 hover:bg-indigo-50"
+                              title="Edit Vehicle"
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteItem(veh.id, veh.vehicleNumber)}
+                              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
+                              title="Delete Vehicle"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -982,6 +1323,17 @@ export const MastersView: React.FC<MastersViewProps> = ({
             <table className="w-full text-left text-xs">
               <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-600 font-extrabold uppercase tracking-wider text-[11px]">
                 <tr>
+                  <th className="py-3 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllVisibleSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isSomeVisibleSelected && !isAllVisibleSelected;
+                      }}
+                      onChange={handleSelectAllVisible}
+                      className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                    />
+                  </th>
                   <th className="py-3 px-4">Transporter Name</th>
                   <th className="py-3 px-4">City</th>
                   <th className="py-3 px-4">PAN & GSTIN</th>
@@ -994,66 +1346,83 @@ export const MastersView: React.FC<MastersViewProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {filteredTransporters.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-500 font-medium">
+                    <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
                       No transporters match your search query.
                     </td>
                   </tr>
                 ) : (
-                  filteredTransporters.map((trn) => (
-                    <tr key={trn.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="font-black text-slate-950 text-sm">{trn.name}</div>
-                        <div className="text-[11px] text-slate-500">
-                          {trn.contactPerson} • {trn.phone}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-slate-800">
-                        {trn.city || '-'}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-bold text-slate-700">
-                        <div>PAN: {trn.panNumber || '-'}</div>
-                        <div className="text-[11px] text-slate-500 font-normal">GST: {trn.gstin || '-'}</div>
-                      </td>
-                      <td className="py-3 px-4 font-mono font-black text-amber-800 text-sm">
-                        {formatCurrency(trn.defaultCommission || 500)}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-black text-emerald-800 text-sm">
-                        {trn.defaultAdvancePercent || 70}%
-                      </td>
-                      <td className="py-3 px-4">
-                        {trn.tdsDeclaration ? (
-                          <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-900 border border-emerald-300 font-bold text-[10px] uppercase">
-                            Sec 194C Nil
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300 font-bold text-[10px] uppercase">
-                            Standard TDS
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end space-x-1">
-                          <button
-                            onClick={() => {
-                              setEditingItem(trn);
-                              setIsModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg text-indigo-700 hover:bg-indigo-50"
-                            title="Edit Transporter"
-                          >
-                            <Edit3 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteItem(trn.id, trn.name)}
-                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
-                            title="Delete Transporter"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  filteredTransporters.map((trn) => {
+                    const isSelected = selectedMasterIds.includes(trn.id);
+
+                    return (
+                      <tr 
+                        key={trn.id} 
+                        className={`transition-colors ${
+                          isSelected ? 'bg-indigo-50/60 hover:bg-indigo-50/90' : 'hover:bg-slate-50/80'
+                        }`}
+                      >
+                        <td className="py-3 px-3 text-center align-middle">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleToggleSelectMaster(trn.id, e as any)}
+                            className="h-4 w-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                          />
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-black text-slate-950 text-sm">{trn.name}</div>
+                          <div className="text-[11px] text-slate-500">
+                            {trn.contactPerson} • {trn.phone}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-slate-800">
+                          {trn.city || '-'}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-700">
+                          <div>PAN: {trn.panNumber || '-'}</div>
+                          <div className="text-[11px] text-slate-500 font-normal">GST: {trn.gstin || '-'}</div>
+                        </td>
+                        <td className="py-3 px-4 font-mono font-black text-amber-800 text-sm">
+                          {formatCurrency(trn.defaultCommission || 500)}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-black text-emerald-800 text-sm">
+                          {trn.defaultAdvancePercent || 70}%
+                        </td>
+                        <td className="py-3 px-4">
+                          {trn.tdsDeclaration ? (
+                            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-900 border border-emerald-300 font-bold text-[10px] uppercase">
+                              Sec 194C Nil
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300 font-bold text-[10px] uppercase">
+                              Standard TDS
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end space-x-1">
+                            <button
+                              onClick={() => {
+                                setEditingItem(trn);
+                                setIsModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg text-indigo-700 hover:bg-indigo-50"
+                              title="Edit Transporter"
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteItem(trn.id, trn.name)}
+                              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
+                              title="Delete Transporter"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1066,6 +1435,17 @@ export const MastersView: React.FC<MastersViewProps> = ({
             <table className="w-full text-left text-xs">
               <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-600 font-extrabold uppercase tracking-wider text-[11px]">
                 <tr>
+                  <th className="py-3 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllVisibleSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isSomeVisibleSelected && !isAllVisibleSelected;
+                      }}
+                      onChange={handleSelectAllVisible}
+                      className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                    />
+                  </th>
                   <th className="py-3 px-4">Corridor (Origin → Destination)</th>
                   <th className="py-3 px-4">Distance (km)</th>
                   <th className="py-3 px-4">Transit Time</th>
@@ -1078,63 +1458,80 @@ export const MastersView: React.FC<MastersViewProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {filteredRoutes.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-500 font-medium">
+                    <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
                       No corridors match your search query. Try the "AI Corridor Benchmarker" button above!
                     </td>
                   </tr>
                 ) : (
-                  filteredRoutes.map((rt) => (
-                    <tr key={rt.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center space-x-2 font-black text-slate-950 text-sm">
-                          <span>{rt.origin}</span>
-                          <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
-                          <span>{rt.destination}</span>
-                        </div>
-                        {rt.notes && (
-                          <div className="text-[11px] text-slate-500 font-normal truncate max-w-xs mt-0.5">
-                            {rt.notes}
+                  filteredRoutes.map((rt) => {
+                    const isSelected = selectedMasterIds.includes(rt.id);
+
+                    return (
+                      <tr 
+                        key={rt.id} 
+                        className={`transition-colors ${
+                          isSelected ? 'bg-sky-50/60 hover:bg-sky-50/90' : 'hover:bg-slate-50/80'
+                        }`}
+                      >
+                        <td className="py-3 px-3 text-center align-middle">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleToggleSelectMaster(rt.id, e as any)}
+                            className="h-4 w-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500 cursor-pointer"
+                          />
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center space-x-2 font-black text-slate-950 text-sm">
+                            <span>{rt.origin}</span>
+                            <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
+                            <span>{rt.destination}</span>
                           </div>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-black text-slate-900 text-sm">
-                        {rt.distanceKm} km
-                      </td>
-                      <td className="py-3 px-4 font-bold text-slate-800">
-                        {rt.transitDays} {rt.transitDays === 1 ? 'Day' : 'Days'}
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-slate-700">
-                        {rt.primaryHighways || 'National Highway'}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-black text-emerald-800 text-sm">
-                        ₹{rt.benchmarkRatePerMT} / MT
-                      </td>
-                      <td className="py-3 px-4 font-mono text-slate-600">
-                        {rt.tollChargesApprox ? formatCurrency(rt.tollChargesApprox) : '-'}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end space-x-1">
-                          <button
-                            onClick={() => {
-                              setEditingItem(rt);
-                              setIsModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg text-indigo-700 hover:bg-indigo-50"
-                            title="Edit Corridor"
-                          >
-                            <Edit3 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteItem(rt.id, `${rt.origin} → ${rt.destination}`)}
-                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
-                            title="Delete Corridor"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                          {rt.notes && (
+                            <div className="text-[11px] text-slate-500 font-normal truncate max-w-xs mt-0.5">
+                              {rt.notes}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-black text-slate-900 text-sm">
+                          {rt.distanceKm} km
+                        </td>
+                        <td className="py-3 px-4 font-bold text-slate-800">
+                          {rt.transitDays} {rt.transitDays === 1 ? 'Day' : 'Days'}
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-slate-700">
+                          {rt.primaryHighways || 'National Highway'}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-black text-emerald-800 text-sm">
+                          ₹{rt.benchmarkRatePerMT} / MT
+                        </td>
+                        <td className="py-3 px-4 font-mono text-slate-600">
+                          {rt.tollChargesApprox ? formatCurrency(rt.tollChargesApprox) : '-'}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end space-x-1">
+                            <button
+                              onClick={() => {
+                                setEditingItem(rt);
+                                setIsModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg text-indigo-700 hover:bg-indigo-50"
+                              title="Edit Corridor"
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteItem(rt.id, `${rt.origin} → ${rt.destination}`)}
+                              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
+                              title="Delete Corridor"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1147,6 +1544,17 @@ export const MastersView: React.FC<MastersViewProps> = ({
             <table className="w-full text-left text-xs">
               <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-600 font-extrabold uppercase tracking-wider text-[11px]">
                 <tr>
+                  <th className="py-3 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllVisibleSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isSomeVisibleSelected && !isAllVisibleSelected;
+                      }}
+                      onChange={handleSelectAllVisible}
+                      className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                    />
+                  </th>
                   <th className="py-3 px-4">Driver Name</th>
                   <th className="py-3 px-4">Mobile Number</th>
                   <th className="py-3 px-4">Driving License #</th>
@@ -1159,54 +1567,71 @@ export const MastersView: React.FC<MastersViewProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {filteredDrivers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-500 font-medium">
+                    <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
                       No drivers match your search query.
                     </td>
                   </tr>
                 ) : (
-                  filteredDrivers.map((drv) => (
-                    <tr key={drv.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-black text-slate-950 text-sm">
-                        {drv.name}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-bold text-slate-800">
-                        {drv.phone}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-bold text-slate-700">
-                        {drv.licenseNumber || '-'}
-                      </td>
-                      <td className="py-3 px-4 text-slate-600">
-                        {drv.licenseExpiry || '-'}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-bold text-slate-900">
-                        {drv.associatedVehicle || '-'}
-                      </td>
-                      <td className="py-3 px-4 text-slate-500">
-                        {drv.emergencyContact || '-'}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end space-x-1">
-                          <button
-                            onClick={() => {
-                              setEditingItem(drv);
-                              setIsModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg text-indigo-700 hover:bg-indigo-50"
-                            title="Edit Driver"
-                          >
-                            <Edit3 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteItem(drv.id, drv.name)}
-                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
-                            title="Delete Driver"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  filteredDrivers.map((drv) => {
+                    const isSelected = selectedMasterIds.includes(drv.id);
+
+                    return (
+                      <tr 
+                        key={drv.id} 
+                        className={`transition-colors ${
+                          isSelected ? 'bg-teal-50/60 hover:bg-teal-50/90' : 'hover:bg-slate-50/80'
+                        }`}
+                      >
+                        <td className="py-3 px-3 text-center align-middle">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleToggleSelectMaster(drv.id, e as any)}
+                            className="h-4 w-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500 cursor-pointer"
+                          />
+                        </td>
+                        <td className="py-3 px-4 font-black text-slate-950 text-sm">
+                          {drv.name}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-800">
+                          {drv.phone}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-700">
+                          {drv.licenseNumber || '-'}
+                        </td>
+                        <td className="py-3 px-4 text-slate-600">
+                          {drv.licenseExpiry || '-'}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900">
+                          {drv.associatedVehicle || '-'}
+                        </td>
+                        <td className="py-3 px-4 text-slate-500">
+                          {drv.emergencyContact || '-'}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end space-x-1">
+                            <button
+                              onClick={() => {
+                                setEditingItem(drv);
+                                setIsModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg text-indigo-700 hover:bg-indigo-50"
+                              title="Edit Driver"
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteItem(drv.id, drv.name)}
+                              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
+                              title="Delete Driver"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1219,6 +1644,17 @@ export const MastersView: React.FC<MastersViewProps> = ({
             <table className="w-full text-left text-xs">
               <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-600 font-extrabold uppercase tracking-wider text-[11px]">
                 <tr>
+                  <th className="py-3 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllVisibleSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isSomeVisibleSelected && !isAllVisibleSelected;
+                      }}
+                      onChange={handleSelectAllVisible}
+                      className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                    />
+                  </th>
                   <th className="py-3 px-4">Commodity / Material</th>
                   <th className="py-3 px-4">HSN Code</th>
                   <th className="py-3 px-4">Default Weight Unit</th>
@@ -1230,51 +1666,68 @@ export const MastersView: React.FC<MastersViewProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {filteredCommodities.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-500 font-medium">
+                    <td colSpan={7} className="py-12 text-center text-slate-500 font-medium">
                       No commodities match your search query.
                     </td>
                   </tr>
                 ) : (
-                  filteredCommodities.map((cmd) => (
-                    <tr key={cmd.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-black text-slate-950 text-sm">
-                        {cmd.name}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-bold text-slate-700">
-                        {cmd.hsnCode || '-'}
-                      </td>
-                      <td className="py-3 px-4 font-bold text-slate-800">
-                        {cmd.defaultWeightUnit}
-                      </td>
-                      <td className="py-3 px-4 text-slate-700 font-medium capitalize">
-                        {cmd.defaultRateType.replace('_', ' ')}
-                      </td>
-                      <td className="py-3 px-4 text-slate-600">
-                        {cmd.packagingType || 'Bulk'}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end space-x-1">
-                          <button
-                            onClick={() => {
-                              setEditingItem(cmd);
-                              setIsModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg text-indigo-700 hover:bg-indigo-50"
-                            title="Edit Commodity"
-                          >
-                            <Edit3 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteItem(cmd.id, cmd.name)}
-                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
-                            title="Delete Commodity"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  filteredCommodities.map((cmd) => {
+                    const isSelected = selectedMasterIds.includes(cmd.id);
+
+                    return (
+                      <tr 
+                        key={cmd.id} 
+                        className={`transition-colors ${
+                          isSelected ? 'bg-rose-50/60 hover:bg-rose-50/90' : 'hover:bg-slate-50/80'
+                        }`}
+                      >
+                        <td className="py-3 px-3 text-center align-middle">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => handleToggleSelectMaster(cmd.id, e as any)}
+                            className="h-4 w-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 cursor-pointer"
+                          />
+                        </td>
+                        <td className="py-3 px-4 font-black text-slate-950 text-sm">
+                          {cmd.name}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-700">
+                          {cmd.hsnCode || '-'}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-slate-800">
+                          {cmd.defaultWeightUnit}
+                        </td>
+                        <td className="py-3 px-4 text-slate-700 font-medium capitalize">
+                          {cmd.defaultRateType.replace('_', ' ')}
+                        </td>
+                        <td className="py-3 px-4 text-slate-600">
+                          {cmd.packagingType || 'Bulk'}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end space-x-1">
+                            <button
+                              onClick={() => {
+                                setEditingItem(cmd);
+                                setIsModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg text-indigo-700 hover:bg-indigo-50"
+                              title="Edit Commodity"
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteItem(cmd.id, cmd.name)}
+                              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
+                              title="Delete Commodity"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1762,13 +2215,156 @@ const MasterItemModal: React.FC<MasterItemModalProps> = ({
                   <label className="block font-bold text-slate-700 mb-1">Role Type</label>
                   <select
                     value={formData.type || 'Consignor'}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-900"
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      setFormData({ 
+                        ...formData, 
+                        type: newType,
+                        isBillingParty: newType === 'Billing Party (Issuer)'
+                      });
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-[#00E676]"
                   >
                     <option value="Consignor">Consignor (Origin)</option>
                     <option value="Consignee">Consignee (Destination)</option>
                     <option value="Both">Both (Consignor & Consignee)</option>
+                    <option value="Billing Party (Issuer)">★ Billing Party (Issuer / Billing From)</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Logo Upload & Branding Block */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 text-xs flex items-center space-x-1.5">
+                    <Sparkles className="h-4 w-4 text-emerald-600" />
+                    <span>Company Logo & Branding (Auto-used in Invoices & Bills)</span>
+                  </span>
+                  {formData.type === 'Billing Party (Issuer)' && (
+                    <span className="px-2 py-0.5 rounded bg-[#00E676]/20 text-emerald-950 font-black text-[10px] border border-emerald-400">
+                      BILLING FROM ENTITY
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  {/* Logo Preview */}
+                  <div className="flex-shrink-0">
+                    {formData.logoUrl ? (
+                      <div className="relative group">
+                        <img
+                          src={formData.logoUrl}
+                          alt="Party Logo Preview"
+                          className="h-16 w-16 object-contain rounded-xl border border-slate-300 bg-white p-1 shadow-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, logoUrl: '' })}
+                          className="absolute -top-1.5 -right-1.5 p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-full shadow-xs transition-colors"
+                          title="Remove Logo"
+                        >
+                          <X className="h-3 w-3 stroke-[3]" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-16 w-16 rounded-xl border-2 border-dashed border-slate-300 bg-white flex flex-col items-center justify-center text-slate-400">
+                        <Building2 className="h-6 w-6 text-slate-300" />
+                        <span className="text-[8px] font-bold mt-0.5">No Logo</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Upload Trigger & URL */}
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <label className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 cursor-pointer shadow-xs transition-colors">
+                        <Upload className="h-3.5 w-3.5 text-[#00E676]" />
+                        <span>Upload Logo File</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              const dataUrl = event.target?.result as string;
+                              if (dataUrl) setFormData({ ...formData, logoUrl: dataUrl });
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                      <span className="text-[11px] text-slate-500 font-medium">PNG, JPG, WebP or SVG</span>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="Or paste direct image URL (https://...)"
+                      value={formData.logoUrl || ''}
+                      onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
+                      className="w-full px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Company Tagline & CIN Registration */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-200">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      Company Tagline / Subtitle
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Premier Surface Transport & Pan-India Fleet Logistics"
+                      value={formData.tagline || ''}
+                      onChange={(e) => setFormData({ ...formData, tagline: e.target.value })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      CIN / MSME Udyam Reg. No.
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. U60231PN2021PTC199882 / UDYAM-MH-26..."
+                      value={formData.cinNumber || ''}
+                      onChange={(e) => setFormData({ ...formData, cinNumber: e.target.value })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-mono text-xs uppercase"
+                    />
+                  </div>
+                </div>
+
+                {/* Website & UPI ID */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      Website URL
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. www.logitrackfreight.in"
+                      value={formData.website || ''}
+                      onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-0.5">
+                      UPI ID for Scan-to-Pay QR (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. logitrack@hdfcbank"
+                      value={formData.upiId || ''}
+                      onChange={(e) => setFormData({ ...formData, upiId: e.target.value })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-mono text-xs text-emerald-800 font-bold"
+                    />
+                  </div>
                 </div>
               </div>
 

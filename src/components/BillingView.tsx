@@ -13,9 +13,15 @@ import {
   getBillerProfile, 
   saveBillerProfile 
 } from '../lib/invoiceService';
+import { getBillingParties, getMasters } from '../lib/mastersService';
+import { 
+  getStoredInvoiceCustomization, 
+  saveStoredInvoiceCustomization 
+} from '../lib/invoiceCustomizationDefaults';
 import { formatCurrency, generateSafeId } from '../lib/calculations';
 import { InvoicePrintModal } from './InvoicePrintModal';
 import { InvoiceBuilderModal } from './InvoiceBuilderModal';
+import { InvoiceCustomizerPanel } from './InvoiceCustomizerPanel';
 import { 
   Plus, 
   Search, 
@@ -37,7 +43,13 @@ import {
   TrendingUp,
   Receipt,
   X,
-  ChevronRight
+  ChevronRight,
+  CheckCheck,
+  CheckSquare,
+  Square,
+  Palette,
+  Sliders,
+  Upload
 } from 'lucide-react';
 
 interface BillingViewProps {
@@ -57,6 +69,9 @@ export const BillingView: React.FC<BillingViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | 'All'>('All');
   const [partyFilter, setPartyFilter] = useState<string>('All');
 
+  // Single & Multi-Selection for Invoices
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
+
   // Modals State
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<FreightInvoice | null>(null);
@@ -73,6 +88,10 @@ export const BillingView: React.FC<BillingViewProps> = ({
   // Biller Profile Settings Modal
   const [isBillerModalOpen, setIsBillerModalOpen] = useState(false);
   const [billerProfile, setBillerProfile] = useState<BillerCompanyInfo>(() => getBillerProfile());
+
+  // Global Invoice Customizer Modal
+  const [isCustomizerModalOpen, setIsCustomizerModalOpen] = useState(false);
+  const [globalCustomization, setGlobalCustomization] = useState(() => getStoredInvoiceCustomization());
 
   // Reload invoices from storage
   const refreshInvoices = () => {
@@ -292,6 +311,161 @@ export const BillingView: React.FC<BillingViewProps> = ({
     showNotification('Invoices ledger exported to CSV.', 'success');
   };
 
+  // Selection Logic & Handlers
+  const isAllFilteredSelected = filteredInvoices.length > 0 && filteredInvoices.every((i) => selectedInvoiceIds.includes(i.id));
+  const isSomeFilteredSelected = filteredInvoices.some((i) => selectedInvoiceIds.includes(i.id));
+
+  const handleToggleSelect = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedInvoiceIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllFiltered = () => {
+    const filteredIds = filteredInvoices.map((i) => i.id);
+    setSelectedInvoiceIds((prev) => {
+      const allSelected = filteredIds.every((id) => prev.includes(id));
+      if (allSelected) {
+        return prev.filter((id) => !filteredIds.includes(id));
+      } else {
+        return Array.from(new Set([...prev, ...filteredIds]));
+      }
+    });
+  };
+
+  const handleSelectAllRecords = () => {
+    setSelectedInvoiceIds(invoices.map((i) => i.id));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedInvoiceIds([]);
+  };
+
+  const handleInvertSelection = () => {
+    const filteredIds = filteredInvoices.map((i) => i.id);
+    setSelectedInvoiceIds((prev) => {
+      const remaining = prev.filter((id) => !filteredIds.includes(id));
+      const newlySelected = filteredIds.filter((id) => !prev.includes(id));
+      return [...remaining, ...newlySelected];
+    });
+  };
+
+  const selectedInvoices = useMemo(() => {
+    return invoices.filter((i) => selectedInvoiceIds.includes(i.id));
+  }, [invoices, selectedInvoiceIds]);
+
+  const selectedStats = useMemo(() => {
+    const count = selectedInvoices.length;
+    const totalGrand = selectedInvoices.reduce((s, inv) => s + (inv.grandTotal || 0), 0);
+    const totalPaid = selectedInvoices.reduce((s, inv) => s + (inv.amountPaid || 0), 0);
+    const totalBalance = selectedInvoices.reduce((s, inv) => s + (inv.balanceDue || 0), 0);
+    return { count, totalGrand, totalPaid, totalBalance };
+  }, [selectedInvoices]);
+
+  // Batch Invoices Actions
+  const handleBatchMarkPaid = () => {
+    if (selectedInvoices.length === 0) return;
+    if (!confirm(`Mark all ${selectedInvoices.length} selected invoices as FULLY PAID?`)) return;
+
+    selectedInvoices.forEach((inv) => {
+      const updated: FreightInvoice = {
+        ...inv,
+        amountPaid: inv.grandTotal,
+        balanceDue: 0,
+        paymentStatus: 'Paid',
+        updatedAt: new Date().toISOString(),
+      };
+      saveInvoice(updated);
+    });
+
+    refreshInvoices();
+    showNotification(`Marked ${selectedInvoices.length} invoices as Paid!`, 'success');
+  };
+
+  const handleBatchMarkUnpaid = () => {
+    if (selectedInvoices.length === 0) return;
+    if (!confirm(`Reset payment status of all ${selectedInvoices.length} selected invoices to UNPAID?`)) return;
+
+    selectedInvoices.forEach((inv) => {
+      const updated: FreightInvoice = {
+        ...inv,
+        amountPaid: 0,
+        balanceDue: inv.grandTotal,
+        paymentStatus: 'Unpaid',
+        updatedAt: new Date().toISOString(),
+      };
+      saveInvoice(updated);
+    });
+
+    refreshInvoices();
+    showNotification(`Reset ${selectedInvoices.length} invoices to Unpaid!`, 'info');
+  };
+
+  const handleBatchDeleteInvoices = () => {
+    if (selectedInvoices.length === 0) return;
+    if (!confirm(`Are you sure you want to permanently delete all ${selectedInvoices.length} selected invoices?`)) return;
+
+    selectedInvoiceIds.forEach((id) => deleteInvoice(id));
+    refreshInvoices();
+    const count = selectedInvoiceIds.length;
+    setSelectedInvoiceIds([]);
+    showNotification(`Deleted ${count} invoices from billing ledger.`, 'info');
+  };
+
+  const handleBatchExportSelectedCsv = () => {
+    if (selectedInvoices.length === 0) return;
+    const headers = [
+      'Invoice Number',
+      'Invoice Date',
+      'Due Date',
+      'Invoice Type',
+      'Billed To Party',
+      'GSTIN',
+      'City',
+      'State',
+      'Total Weight (MT)',
+      'Taxable Freight',
+      'GST Rate (%)',
+      'Is RCM',
+      'Total Tax',
+      'Grand Total',
+      'Amount Paid',
+      'Balance Due',
+      'Payment Status',
+    ];
+
+    const rows = selectedInvoices.map((inv) => [
+      `"${inv.invoiceNumber}"`,
+      `"${inv.invoiceDate}"`,
+      `"${inv.dueDate}"`,
+      `"${inv.invoiceType}"`,
+      `"${inv.billedTo.partyName}"`,
+      `"${inv.billedTo.gstin || ''}"`,
+      `"${inv.billedTo.city || ''}"`,
+      `"${inv.billedTo.state || ''}"`,
+      inv.totalWeight,
+      inv.taxableAmount,
+      inv.gstRate,
+      inv.isRcm ? 'YES' : 'NO',
+      inv.totalTax,
+      inv.grandTotal,
+      inv.amountPaid,
+      inv.balanceDue,
+      `"${inv.paymentStatus}"`,
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `LogiTrack_Invoices_Selected_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showNotification(`Exported ${selectedInvoices.length} selected invoices to CSV.`, 'success');
+  };
+
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-150">
       {/* Top Header & Quick Actions */}
@@ -316,11 +490,22 @@ export const BillingView: React.FC<BillingViewProps> = ({
         </div>
 
         <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+          {/* Invoice Styler & Layouts Button */}
+          <button
+            type="button"
+            onClick={() => setIsCustomizerModalOpen(true)}
+            className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-[#00E676] border border-slate-800 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
+            title="Customize themes, colors, column headers, terms presets, and QR code settings"
+          >
+            <Palette className="h-4 w-4 text-[#00E676]" />
+            <span>100% Styler & Themes</span>
+          </button>
+
           {/* Company Profile Settings Button */}
           <button
             type="button"
             onClick={() => setIsBillerModalOpen(true)}
-            className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors"
+            className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
           >
             <Building2 className="h-4 w-4 text-slate-700" />
             <span>Issuer / Company Info</span>
@@ -331,7 +516,7 @@ export const BillingView: React.FC<BillingViewProps> = ({
             type="button"
             onClick={handleExportInvoicesCsv}
             disabled={invoices.length === 0}
-            className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors disabled:opacity-40"
+            className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors disabled:opacity-40 cursor-pointer"
           >
             <Download className="h-4 w-4 text-emerald-700" />
             <span>Export CSV</span>
@@ -344,7 +529,7 @@ export const BillingView: React.FC<BillingViewProps> = ({
               setEditingInvoice(null);
               setIsBuilderOpen(true);
             }}
-            className="px-4 py-2 bg-[#00E676] hover:bg-[#00c864] text-slate-950 rounded-xl text-xs font-black flex items-center space-x-1.5 shadow-xs border border-emerald-400 transition-all"
+            className="px-4 py-2 bg-[#00E676] hover:bg-[#00c864] text-slate-950 rounded-xl text-xs font-black flex items-center space-x-1.5 shadow-xs border border-emerald-400 transition-all cursor-pointer"
           >
             <Plus className="h-4 w-4 stroke-[3]" />
             <span>Generate Bill / Invoice</span>
@@ -490,12 +675,189 @@ export const BillingView: React.FC<BillingViewProps> = ({
         </div>
       </div>
 
+      {/* SELECTION ACTIONS & STATS STRIP */}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 px-1 font-medium">
+        <div className="flex items-center space-x-3 flex-wrap gap-y-1">
+          {filteredInvoices.length > 0 && (
+            <div className="flex items-center space-x-2 bg-white px-2.5 py-1 rounded-lg border border-slate-300 shadow-xs">
+              <label className="flex items-center space-x-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isAllFilteredSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = isSomeFilteredSelected && !isAllFilteredSelected;
+                  }}
+                  onChange={handleSelectAllFiltered}
+                  className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                />
+                <span className="font-bold text-slate-900 text-xs">
+                  {isAllFilteredSelected ? 'Deselect All' : `Select All Visible (${filteredInvoices.length})`}
+                </span>
+              </label>
+            </div>
+          )}
+
+          <div>
+            Showing <span className="text-slate-950 font-black">{filteredInvoices.length}</span> of{' '}
+            <span className="text-slate-950 font-black">{invoices.length}</span> invoices
+            {(searchQuery || statusFilter !== 'All' || partyFilter !== 'All') && (
+              <span className="text-emerald-700 font-bold ml-1.5">(Filtered)</span>
+            )}
+          </div>
+        </div>
+
+        {/* Multi-Selection Fast Action Buttons */}
+        {filteredInvoices.length > 0 && (
+          <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+            <button
+              type="button"
+              onClick={handleSelectAllFiltered}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors flex items-center space-x-1 ${
+                isAllFilteredSelected
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+              }`}
+            >
+              <CheckCheck className="h-3 w-3" />
+              <span>{isAllFilteredSelected ? 'Deselect Visible' : `Select All Visible (${filteredInvoices.length})`}</span>
+            </button>
+
+            {invoices.length > filteredInvoices.length && (
+              <button
+                type="button"
+                onClick={handleSelectAllRecords}
+                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-bold transition-colors"
+              >
+                Select All {invoices.length}
+              </button>
+            )}
+
+            {selectedInvoiceIds.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleInvertSelection}
+                  className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-600 border border-slate-300 rounded-lg text-[11px] font-medium"
+                >
+                  Invert
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearSelection}
+                  className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[11px] font-bold"
+                >
+                  Clear ({selectedInvoiceIds.length})
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* FLOATING / STICKY BATCH ACTIONS BAR (when invoices are selected) */}
+      {selectedInvoiceIds.length > 0 && (
+        <div className="sticky top-20 z-20 bg-slate-950 text-white rounded-2xl p-3 sm:p-4 shadow-xl border border-emerald-500/40 animate-in fade-in slide-in-from-top-3 duration-150">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            {/* Selection Stats */}
+            <div className="flex items-center space-x-3">
+              <div className="h-8 w-8 rounded-xl bg-emerald-500/20 text-[#00E676] flex items-center justify-center font-mono font-black text-sm border border-emerald-500/40">
+                {selectedStats.count}
+              </div>
+              <div>
+                <div className="font-black text-white text-xs flex items-center space-x-1.5">
+                  <span>{selectedStats.count} Invoices Selected</span>
+                  <span>•</span>
+                  <span className="text-emerald-400 font-mono">Turnover: {formatCurrency(selectedStats.totalGrand)}</span>
+                  {selectedStats.totalBalance > 0 && (
+                    <>
+                      <span>•</span>
+                      <span className="text-rose-400 font-mono">Due: {formatCurrency(selectedStats.totalBalance)}</span>
+                    </>
+                  )}
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  Perform batch settlement, export or deletion on selected invoices
+                </div>
+              </div>
+            </div>
+
+            {/* Batch Action Buttons */}
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1.5">
+              {/* Batch Mark as Paid */}
+              <button
+                type="button"
+                onClick={handleBatchMarkPaid}
+                className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-black flex items-center space-x-1.5 shadow-xs transition-colors"
+                title="Mark all selected invoices as Fully Paid"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Mark Paid ({selectedStats.count})</span>
+              </button>
+
+              {/* Batch Mark as Unpaid */}
+              <button
+                type="button"
+                onClick={handleBatchMarkUnpaid}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 border border-slate-700 transition-colors"
+                title="Reset selected invoices to Unpaid"
+              >
+                <Clock className="h-3.5 w-3.5 text-amber-400" />
+                <span>Mark Unpaid</span>
+              </button>
+
+              {/* Batch Export Selected to CSV */}
+              <button
+                type="button"
+                onClick={handleBatchExportSelectedCsv}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 border border-slate-700 transition-colors"
+                title="Export selected invoices to CSV"
+              >
+                <Download className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Export CSV</span>
+              </button>
+
+              {/* Batch Delete */}
+              <button
+                type="button"
+                onClick={handleBatchDeleteInvoices}
+                className="px-3 py-1.5 bg-rose-600/30 hover:bg-rose-600 text-rose-300 hover:text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 border border-rose-500/40 transition-colors"
+                title="Delete Selected Invoices"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Delete ({selectedStats.count})</span>
+              </button>
+
+              {/* Clear Selection */}
+              <button
+                type="button"
+                onClick={handleClearSelection}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+                title="Deselect All"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Invoices Ledger Table */}
       <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-600 font-extrabold uppercase text-[10px] tracking-wider">
               <tr>
+                <th className="p-3.5 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={isAllFilteredSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = isSomeFilteredSelected && !isAllFilteredSelected;
+                    }}
+                    onChange={handleSelectAllFiltered}
+                    className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                  />
+                </th>
                 <th className="p-3.5">Invoice # & Date</th>
                 <th className="p-3.5">Billed To (Party)</th>
                 <th className="p-3.5">LRs & Route</th>
@@ -508,7 +870,7 @@ export const BillingView: React.FC<BillingViewProps> = ({
             <tbody className="divide-y divide-slate-100">
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-12 text-center text-slate-500">
+                  <td colSpan={8} className="p-12 text-center text-slate-500">
                     <Receipt className="h-10 w-10 text-slate-300 mx-auto mb-2" />
                     <p className="font-bold text-slate-800 text-sm">No freight invoices found</p>
                     <p className="text-xs text-slate-500 mt-1">
@@ -532,9 +894,25 @@ export const BillingView: React.FC<BillingViewProps> = ({
               ) : (
                 filteredInvoices.map((inv) => {
                   const percentPaid = inv.grandTotal > 0 ? Math.min(100, Math.round(((inv.amountPaid || 0) / inv.grandTotal) * 100)) : 100;
+                  const isSelected = selectedInvoiceIds.includes(inv.id);
 
                   return (
-                    <tr key={inv.id} className="hover:bg-slate-50/70 transition-colors">
+                    <tr 
+                      key={inv.id} 
+                      className={`transition-colors ${
+                        isSelected ? 'bg-emerald-50/70 hover:bg-emerald-50/90' : 'hover:bg-slate-50/70'
+                      }`}
+                    >
+                      {/* Checkbox Column */}
+                      <td className="p-3.5 text-center align-middle">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => handleToggleSelect(inv.id, e as any)}
+                          className="h-4 w-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                        />
+                      </td>
+
                       {/* Invoice # & Date */}
                       <td className="p-3.5">
                         <div className="font-black font-mono text-slate-950 text-xs flex items-center space-x-1.5">
@@ -700,6 +1078,17 @@ export const BillingView: React.FC<BillingViewProps> = ({
       <InvoicePrintModal
         invoice={selectedInvoiceForPrint}
         onClose={() => setSelectedInvoiceForPrint(null)}
+        onUpdateInvoiceCustomization={(updatedCustomization) => {
+          if (!selectedInvoiceForPrint) return;
+          const updatedInv: FreightInvoice = {
+            ...selectedInvoiceForPrint,
+            customization: updatedCustomization,
+            updatedAt: new Date().toISOString(),
+          };
+          saveInvoice(updatedInv);
+          refreshInvoices();
+          setSelectedInvoiceForPrint(updatedInv);
+        }}
       />
 
       {/* RECORD PAYMENT MODAL */}
@@ -827,16 +1216,19 @@ export const BillingView: React.FC<BillingViewProps> = ({
         </div>
       )}
 
-      {/* BILLER COMPANY SETTINGS MODAL */}
+      {/* BILLER PROFILE / ISSUER SETTINGS MODAL */}
       {isBillerModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
-          <div className="bg-white border border-slate-300 w-full max-w-xl rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-300 w-full max-w-xl rounded-2xl shadow-2xl p-6 space-y-4 max-h-[92vh] flex flex-col my-4">
             <div className="flex items-center justify-between border-b pb-3">
               <div className="flex items-center space-x-2">
                 <Building2 className="h-5 w-5 text-indigo-700" />
-                <h4 className="font-black text-slate-950 text-base">
-                  Transport Agency / Issuer Billing Profile
-                </h4>
+                <div>
+                  <h4 className="font-black text-slate-950 text-base">
+                    Transport Agency / Issuer Billing Profile
+                  </h4>
+                  <p className="text-xs text-slate-500">Configure default company branding, logo, GSTIN and bank coordinates.</p>
+                </div>
               </div>
               <button
                 onClick={() => setIsBillerModalOpen(false)}
@@ -846,7 +1238,120 @@ export const BillingView: React.FC<BillingViewProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSaveBillerProfile} className="space-y-3 overflow-y-auto text-xs">
+            <form onSubmit={handleSaveBillerProfile} className="space-y-4 overflow-y-auto text-xs pr-1">
+              {/* Autofill from Master Billing Parties */}
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center space-x-2">
+                  <Sparkles className="h-4 w-4 text-emerald-700 flex-shrink-0" />
+                  <span className="font-bold text-emerald-950 text-xs">Autofill from Master Parties:</span>
+                </div>
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    const partyId = e.target.value;
+                    if (!partyId) return;
+                    const allParties = getMasters().parties;
+                    const found = allParties.find((p) => p.id === partyId || p.name === partyId);
+                    if (found) {
+                      setBillerProfile({
+                        companyName: found.name,
+                        tagline: found.tagline || billerProfile.tagline || '',
+                        logoUrl: found.logoUrl || billerProfile.logoUrl || '',
+                        cinNumber: found.cinNumber || billerProfile.cinNumber || '',
+                        gstin: found.gstin || billerProfile.gstin || '',
+                        panNumber: found.panNumber || billerProfile.panNumber || '',
+                        address: found.address || billerProfile.address || '',
+                        city: found.city || billerProfile.city || '',
+                        state: found.state || billerProfile.state || 'Maharashtra',
+                        pincode: found.pincode || billerProfile.pincode || '',
+                        phone: found.phone || billerProfile.phone || '',
+                        email: found.email || billerProfile.email || '',
+                        website: found.website || billerProfile.website || '',
+                        bankName: found.bankName || billerProfile.bankName || '',
+                        bankAccountNumber: found.bankAccountNumber || billerProfile.bankAccountNumber || '',
+                        bankIfsc: found.bankIfsc || billerProfile.bankIfsc || '',
+                        bankBranch: found.bankBranch || billerProfile.bankBranch || '',
+                        accountHolderName: found.accountHolderName || found.name,
+                        upiId: found.upiId || billerProfile.upiId || '',
+                      });
+                    }
+                  }}
+                  className="px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg text-xs font-bold text-emerald-950 focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                >
+                  <option value="">-- Select Master Billing Party --</option>
+                  {getBillingParties().map((bp) => (
+                    <option key={bp.id} value={bp.id}>
+                      {bp.name} ({bp.city}) {bp.type === 'Billing Party (Issuer)' ? '★ Billing Party' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Logo Upload & Preview */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <span className="font-bold text-slate-800 text-xs flex items-center space-x-1.5">
+                  <Building2 className="h-4 w-4 text-slate-600" />
+                  <span>Company Logo (Printed on all Invoices & Bills)</span>
+                </span>
+                <div className="flex items-center space-x-3">
+                  <div className="flex-shrink-0">
+                    {billerProfile.logoUrl ? (
+                      <div className="relative group">
+                        <img
+                          src={billerProfile.logoUrl}
+                          alt="Logo Preview"
+                          className="h-14 w-14 object-contain rounded-lg border border-slate-300 bg-white p-1 shadow-2xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setBillerProfile({ ...billerProfile, logoUrl: '' })}
+                          className="absolute -top-1 -right-1 p-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded-full shadow-xs"
+                          title="Remove Logo"
+                        >
+                          <X className="h-3 w-3 stroke-[3]" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-14 w-14 rounded-lg border-2 border-dashed border-slate-300 bg-white flex flex-col items-center justify-center text-slate-400">
+                        <Building2 className="h-5 w-5 text-slate-300" />
+                        <span className="text-[7px] font-bold mt-0.5">No Logo</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <div className="flex items-center space-x-2">
+                      <label className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 cursor-pointer shadow-xs transition-colors">
+                        <Upload className="h-3.5 w-3.5 text-[#00E676]" />
+                        <span>Upload Logo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              const dataUrl = event.target?.result as string;
+                              if (dataUrl) setBillerProfile({ ...billerProfile, logoUrl: dataUrl });
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                      <span className="text-[10px] text-slate-500">PNG, JPG, SVG or WebP</span>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Or paste image URL (https://...)"
+                      value={billerProfile.logoUrl || ''}
+                      onChange={(e) => setBillerProfile({ ...billerProfile, logoUrl: e.target.value })}
+                      className="w-full px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Company / Transporter Name *</label>
                 <input
@@ -856,6 +1361,29 @@ export const BillingView: React.FC<BillingViewProps> = ({
                   onChange={(e) => setBillerProfile({ ...billerProfile, companyName: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-950"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Tagline / Slogan</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Reliable Road Logistics Across India"
+                    value={billerProfile.tagline || ''}
+                    onChange={(e) => setBillerProfile({ ...billerProfile, tagline: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">CIN / MSME / Reg No</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. U63090MH2021PTC368920"
+                    value={billerProfile.cinNumber || ''}
+                    onChange={(e) => setBillerProfile({ ...billerProfile, cinNumber: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono uppercase"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -950,7 +1478,7 @@ export const BillingView: React.FC<BillingViewProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">UPI ID (Optional)</label>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">UPI ID (for QR Code)</label>
                     <input
                       type="text"
                       value={billerProfile.upiId || ''}
@@ -965,18 +1493,87 @@ export const BillingView: React.FC<BillingViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsBillerModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#00E676] hover:bg-[#00c864] text-slate-950 font-black rounded-xl shadow-xs"
+                  className="px-5 py-2 bg-[#00E676] hover:bg-[#00c864] text-slate-950 font-black rounded-xl shadow-xs cursor-pointer"
                 >
                   Save Profile
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* GLOBAL 100% INVOICE CUSTOMIZER MODAL */}
+      {isCustomizerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-4xl rounded-2xl shadow-2xl p-4 sm:p-6 space-y-4 max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <span className="p-2 rounded-xl bg-emerald-500/20 text-[#00E676] border border-emerald-500/30">
+                  <Palette className="h-5 w-5" />
+                </span>
+                <div>
+                  <h4 className="font-black text-white text-base tracking-tight">
+                    Global Freight Invoice Styler & Templates
+                  </h4>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Configure default layouts, fonts, brand colors, QR codes, and terms presets for all future invoices.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsCustomizerModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              <InvoiceCustomizerPanel
+                customization={globalCustomization}
+                onChange={(updated) => {
+                  setGlobalCustomization(updated);
+                  saveStoredInvoiceCustomization(updated);
+                }}
+                onSaveAsDefault={() => {
+                  saveStoredInvoiceCustomization(globalCustomization);
+                  showNotification('Default Invoice Styling & Formatting updated successfully!', 'success');
+                  setIsCustomizerModalOpen(false);
+                }}
+                onResetToDefault={() => {
+                  setGlobalCustomization(getStoredInvoiceCustomization());
+                  showNotification('Reset to factory defaults.', 'info');
+                }}
+              />
+            </div>
+
+            <div className="pt-2 border-t border-slate-800 flex justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setIsCustomizerModalOpen(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  saveStoredInvoiceCustomization(globalCustomization);
+                  showNotification('Default Invoice Styling & Formatting saved!', 'success');
+                  setIsCustomizerModalOpen(false);
+                }}
+                className="px-5 py-2 bg-[#00E676] hover:bg-[#00c864] text-slate-950 font-black rounded-xl text-xs shadow-xs border border-emerald-400 cursor-pointer"
+              >
+                Save as Default
+              </button>
+            </div>
           </div>
         </div>
       )}

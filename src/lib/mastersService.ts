@@ -16,6 +16,60 @@ export const DEFAULT_MASTERS: AllMasters = {
   lastUpdated: new Date().toISOString(),
   parties: [
     {
+      id: 'pty-0',
+      name: 'LogiTrack Freight Solutions & Logistics Pvt. Ltd.',
+      type: 'Billing Party (Issuer)',
+      isBillingParty: true,
+      tagline: 'Premier Surface Transport & Pan-India Fleet Logistics',
+      city: 'Pune',
+      state: 'Maharashtra',
+      pincode: '411044',
+      gstin: '27AAACL8890M1Z4',
+      panNumber: 'AAACL8890M',
+      cinNumber: 'U60231PN2021PTC199882',
+      address: 'Plot 45, Transport Nagar, Phase-2, Industrial Area, Nigdi',
+      contactPerson: 'Harish Rathi (Director)',
+      phone: '+91 98220 44550 / +91 020 27448899',
+      email: 'billing@logitrackfreight.in',
+      website: 'www.logitrackfreight.in',
+      defaultPaymentTerms: '30 Days Net',
+      bankName: 'HDFC Bank Ltd.',
+      bankAccountNumber: '50200088991234',
+      bankIfsc: 'HDFC0001234',
+      bankBranch: 'Nigdi Pradhikaran Branch, Pune',
+      accountHolderName: 'LogiTrack Freight Solutions Pvt Ltd',
+      upiId: 'logitrack@hdfcbank',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'pty-0b',
+      name: 'TransIndia Surface Fleet & Cargo LLP',
+      type: 'Billing Party (Issuer)',
+      isBillingParty: true,
+      tagline: 'Full Truckload & Container Drayage Operations',
+      city: 'Mumbai',
+      state: 'Maharashtra',
+      pincode: '400099',
+      gstin: '27AAACT9082L1Z9',
+      panNumber: 'AAACT9082L',
+      cinNumber: 'AAA-9988-LLP',
+      address: 'Office 304, Freight Corridor Tower, Andheri East',
+      contactPerson: 'Suresh Singhania',
+      phone: '+91 98201 33445',
+      email: 'accounts@transindialogistics.in',
+      website: 'www.transindialogistics.in',
+      defaultPaymentTerms: '15 Days / Immediate',
+      bankName: 'ICICI Bank Ltd',
+      bankAccountNumber: '003505099881',
+      bankIfsc: 'ICIC0000035',
+      bankBranch: 'Andheri East Branch, Mumbai',
+      accountHolderName: 'TransIndia Surface Fleet LLP',
+      upiId: 'transindia@icici',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
       id: 'pty-1',
       name: 'Tata Steel Processing Ltd',
       type: 'Consignor',
@@ -1026,3 +1080,35 @@ export function restoreMasters(
   saveMasters(merged);
   return merged;
 }
+
+/**
+ * Returns all Parties configured as Billing Entities / Issuers
+ */
+export function getBillingParties(): PartyMaster[] {
+  const masters = getMasters();
+  const billingParties = masters.parties.filter(
+    (p) => p.type === 'Billing Party (Issuer)' || p.isBillingParty === true
+  );
+
+  // If none explicitly tagged yet, fallback to all parties or default biller
+  if (billingParties.length === 0) {
+    return masters.parties;
+  }
+  return billingParties;
+}
+
+/**
+ * Finds a billing party by name or ID
+ */
+export function findBillingPartyMaster(identifier?: string): PartyMaster | undefined {
+  if (!identifier) return undefined;
+  const masters = getMasters();
+  const clean = identifier.trim().toLowerCase();
+  return masters.parties.find(
+    (p) =>
+      p.id.toLowerCase() === clean ||
+      p.name.toLowerCase().trim() === clean ||
+      p.name.toLowerCase().includes(clean)
+  );
+}
+

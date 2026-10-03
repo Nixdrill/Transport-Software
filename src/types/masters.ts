@@ -1,7 +1,9 @@
+export type PartyType = 'Consignor' | 'Consignee' | 'Both' | 'Billing Party (Issuer)';
+
 export interface PartyMaster {
   id: string;
   name: string;
-  type: 'Consignor' | 'Consignee' | 'Both';
+  type: PartyType;
   city: string;
   state: string;
   pincode?: string;
@@ -12,6 +14,15 @@ export interface PartyMaster {
   phone?: string;
   email?: string;
   defaultPaymentTerms?: string;
+  
+  // Billing Party (Issuer) & Branding Details
+  logoUrl?: string; // Base64 Data URL or Image URL
+  tagline?: string;
+  cinNumber?: string; // CIN / MSME Udyam Registration No.
+  website?: string;
+  upiId?: string;
+  isBillingParty?: boolean;
+
   // Optional Bank Account Details
   bankName?: string;
   bankAccountNumber?: string;

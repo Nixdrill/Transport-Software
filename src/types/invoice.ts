@@ -23,6 +23,8 @@ export interface InvoicePartyInfo {
 export interface BillerCompanyInfo {
   companyName: string;
   tagline?: string;
+  logoUrl?: string;
+  cinNumber?: string;
   gstin?: string;
   panNumber?: string;
   address?: string;
@@ -136,6 +138,144 @@ export interface FreightInvoice {
   preparedBy?: string;
   authorizedSignatoryName?: string;
 
+  // 100% Invoice Customization Settings
+  customization?: InvoiceCustomization;
+
   createdAt: string;
   updatedAt: string;
+}
+
+export type InvoiceTemplateId = 
+  | 'modern-clean' 
+  | 'classic-corporate' 
+  | 'compact-slip' 
+  | 'executive-emerald' 
+  | 'crimson-express' 
+  | 'slate-dark' 
+  | 'monochrome-print';
+
+export type FontFamilyType = 'inter' | 'roboto-mono' | 'georgia' | 'system';
+export type FontSizeScale = 'compact' | 'normal' | 'large';
+export type TableDensity = 'tight' | 'comfortable' | 'spacious';
+export type DateFormatType = 'DD/MM/YYYY' | 'YYYY-MM-DD' | 'DD-MMM-YYYY';
+export type NumberFormatType = 'indian' | 'international';
+export type LogoPositionType = 'left' | 'center' | 'right';
+export type LogoSizeType = 'small' | 'medium' | 'large';
+
+export interface CustomExtraCharge {
+  id: string;
+  name: string;
+  amount: number;
+  isDeduction?: boolean;
+}
+
+export interface InvoiceColumnConfig {
+  visible: boolean;
+  label: string;
+}
+
+export interface InvoiceCustomization {
+  // Theme & Layout
+  templateId: InvoiceTemplateId;
+  primaryColor: string; // e.g. #0f172a
+  accentColor: string; // e.g. #00E676
+  fontFamily: FontFamilyType;
+  fontSize: FontSizeScale;
+  tableDensity: TableDensity;
+  
+  // Branding & Logo
+  showLogo: boolean;
+  logoUrl?: string;
+  logoPosition: LogoPositionType;
+  logoSize: LogoSizeType;
+  showWatermark: boolean;
+  watermarkText: string;
+  watermarkOpacity: number; // 0.05 to 0.4
+
+  // Document Headers & Context
+  documentTitle: string; // e.g. 'TAX INVOICE'
+  subTitle: string; // e.g. 'GOODS TRANSPORT AGENCY (GTA) ROAD FREIGHT'
+  copyType: string; // 'Original for Recipient', 'Duplicate for Transporter', etc.
+  customCopyLabel?: string;
+  invoiceNumberLabel: string;
+  invoiceDateLabel: string;
+  dueDateLabel: string;
+  
+  // Transport Context Fields
+  poNumber?: string;
+  poDate?: string;
+  eWayBillNumber?: string;
+  vehicleType?: string;
+  placeOfSupply?: string;
+  sacDescription: string;
+
+  // Issuer (Billed By) Block Options
+  showBillerGstin: boolean;
+  showBillerPan: boolean;
+  showBillerCin: boolean;
+  billerCin?: string;
+  showBillerContact: boolean;
+  showBillerBank: boolean;
+
+  // Recipient (Billed To) Block Options
+  showPartyGstin: boolean;
+  showPartyPan: boolean;
+  showPartyContact: boolean;
+  showShipToAddress: boolean;
+  shipTo?: InvoicePartyInfo;
+
+  // Columns Configuration
+  columns: {
+    srNo: InvoiceColumnConfig;
+    lrNo: InvoiceColumnConfig;
+    lrDate: InvoiceColumnConfig;
+    vehicleNo: InvoiceColumnConfig;
+    route: InvoiceColumnConfig;
+    commodity: InvoiceColumnConfig;
+    weight: InvoiceColumnConfig;
+    rate: InvoiceColumnConfig;
+    freightAmount: InvoiceColumnConfig;
+    extraCharges: InvoiceColumnConfig;
+    advanceDeduction: InvoiceColumnConfig;
+    netAmount: InvoiceColumnConfig;
+  };
+
+  // Additional Custom Charges / Deductions
+  customCharges?: CustomExtraCharge[];
+
+  // Tax, Currency & Number Formatting
+  currencySymbol: string; // e.g. '₹'
+  currencyCode: string; // 'INR'
+  numberFormat: NumberFormatType;
+  dateFormat: DateFormatType;
+  showAmountInWords: boolean;
+  amountInWordsPrefix: string;
+  showRcmBanner: boolean;
+  rcmNotificationText: string;
+  showTaxBreakup: boolean;
+  showTdsBreakup: boolean;
+  showRoundOff: boolean;
+
+  // Banking & Dynamic UPI QR Code
+  showBankDetails: boolean;
+  bankSectionTitle: string;
+  showUpiQr: boolean;
+  upiId?: string;
+  upiPayeeName?: string;
+  paymentInstructions?: string;
+
+  // Terms, Declaration & Signatures
+  showTerms: boolean;
+  termsTitle: string;
+  termsText: string;
+  showDeclaration: boolean;
+  declarationText: string;
+  showSignatureLeft: boolean;
+  signatureLeftTitle: string;
+  signatureLeftName: string;
+  showSignatureRight: boolean;
+  signatureRightTitle: string;
+  signatureRightCompany: string;
+  signatureStampUrl?: string;
+  footerNote?: string;
 }
