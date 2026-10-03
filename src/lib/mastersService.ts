@@ -7,6 +7,7 @@ import {
   CommodityMaster, 
   AllMasters 
 } from '../types/masters';
+import { DispatchRecord } from '../types/dispatch';
 import { generateSafeId } from './calculations';
 
 const MASTERS_STORAGE_KEY = 'logitrack_masters_v1';
@@ -20,12 +21,19 @@ export const DEFAULT_MASTERS: AllMasters = {
       type: 'Consignor',
       city: 'Jamshedpur',
       state: 'Jharkhand',
+      pincode: '831001',
       gstin: '20AAACT2727Q1ZS',
-      address: 'Industrial Growth Centre, Phase 2',
+      panNumber: 'AAACT2727Q',
+      address: 'Plot No. 14, Industrial Growth Centre, Phase 2, Adityapur Industrial Area',
       contactPerson: 'Arunav Mukherjee',
       phone: '+91 98321 00412',
       email: 'logistics@tatasteel.com',
       defaultPaymentTerms: '30 Days Net',
+      bankName: 'State Bank of India',
+      bankAccountNumber: '38192019284',
+      bankIfsc: 'SBIN0001827',
+      bankBranch: 'Bistupur Commercial Branch, Jamshedpur',
+      accountHolderName: 'Tata Steel Processing Ltd',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -35,12 +43,19 @@ export const DEFAULT_MASTERS: AllMasters = {
       type: 'Consignee',
       city: 'Mumbai',
       state: 'Maharashtra',
+      pincode: '400065',
       gstin: '27AAACL0140P1ZM',
-      address: 'Gate 5, Metro Casting Yard, Aarey Colony',
+      panNumber: 'AAACL0140P',
+      address: 'Gate 5, Metro Casting Yard, Aarey Milk Colony, Western Express Highway, Goregaon East',
       contactPerson: 'Sunil Deshmukh',
       phone: '+91 98200 45190',
       email: 'stores.mumbai@lntecc.com',
       defaultPaymentTerms: '15 Days / To Pay',
+      bankName: 'HDFC Bank Ltd',
+      bankAccountNumber: '50200029104812',
+      bankIfsc: 'HDFC0000060',
+      bankBranch: 'Fort Commercial Branch, Mumbai',
+      accountHolderName: 'Larsen & Toubro Infra Projects',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -50,12 +65,19 @@ export const DEFAULT_MASTERS: AllMasters = {
       type: 'Consignor',
       city: 'Nagpur',
       state: 'Maharashtra',
+      pincode: '441108',
       gstin: '27AAACU0305R1ZK',
-      address: 'MIDC Butibori Industrial Area',
+      panNumber: 'AAACU0305R',
+      address: 'Plot B-45, MIDC Butibori Industrial Area, Wardha Road',
       contactPerson: 'Rajesh Agrawal',
       phone: '+91 94221 88390',
       email: 'dispatch.nagpur@ultratech.com',
       defaultPaymentTerms: 'Advance / Immediate',
+      bankName: 'ICICI Bank Ltd',
+      bankAccountNumber: '003505018271',
+      bankIfsc: 'ICIC0000035',
+      bankBranch: 'Civil Lines, Nagpur',
+      accountHolderName: 'UltraTech Cement Works',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -65,12 +87,19 @@ export const DEFAULT_MASTERS: AllMasters = {
       type: 'Both',
       city: 'Ahmedabad',
       state: 'Gujarat',
+      pincode: '382170',
       gstin: '24AAACR5055K1Z8',
-      address: 'Sanand Logistic Park, Sarkhej-Bavla Road',
+      panNumber: 'AAACR5055K',
+      address: 'Warehouse Block C, Sanand Logistic Park, Sarkhej-Bavla National Highway',
       contactPerson: 'Ketan Shah',
       phone: '+91 99099 22100',
       email: 'inbound.sanand@ril.com',
       defaultPaymentTerms: '45 Days Corporate',
+      bankName: 'Axis Bank Ltd',
+      bankAccountNumber: '914020019283741',
+      bankIfsc: 'UTIB0000022',
+      bankBranch: 'SG Highway Branch, Ahmedabad',
+      accountHolderName: 'Reliance Retail Logistics Hub',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -80,12 +109,19 @@ export const DEFAULT_MASTERS: AllMasters = {
       type: 'Consignor',
       city: 'Raigarh',
       state: 'Chhattisgarh',
+      pincode: '496001',
       gstin: '22AAACJ1408M1Z7',
-      address: 'OP Jindal Industrial Park, Punjipathra',
+      panNumber: 'AAACJ1408M',
+      address: 'OP Jindal Industrial Park, Punjipathra, Raigarh-Tamnar Corridor',
       contactPerson: 'Vikas Sharma',
       phone: '+91 97555 33020',
       email: 'dispatch@raigarh.jspl.com',
       defaultPaymentTerms: '30 Days Net',
+      bankName: 'Punjab National Bank',
+      bankAccountNumber: '1849002100049281',
+      bankIfsc: 'PUNB0184900',
+      bankBranch: 'Main Road Raigarh',
+      accountHolderName: 'Jindal Steel & Power Ltd',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -95,12 +131,19 @@ export const DEFAULT_MASTERS: AllMasters = {
       type: 'Consignee',
       city: 'Mundra',
       state: 'Gujarat',
+      pincode: '370421',
       gstin: '24AAACA2804K1ZV',
-      address: 'West Port Gate, Mundra Port Complex',
+      panNumber: 'AAACA2804K',
+      address: 'West Port Gate No. 3, Container Freight Station, Mundra Port Complex',
       contactPerson: 'Bhavesh Patel',
       phone: '+91 98250 11988',
       email: 'cargo.gate@adani.com',
       defaultPaymentTerms: 'Immediate Port Clearance',
+      bankName: 'Kotak Mahindra Bank',
+      bankAccountNumber: '7412948201',
+      bankIfsc: 'KKBK0000812',
+      bankBranch: 'Mundra Port Complex',
+      accountHolderName: 'Adani Ports & SEZ Terminal',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -527,4 +570,434 @@ export function suggestConsignees(consignorName: string): PartyMaster[] {
   return masters.parties.filter(
     (p) => p.type === 'Consignee' || p.type === 'Both' || p.name !== consignorName
   );
+}
+
+// ================= GSTIN TO PAN EXTRACTION =================
+
+/**
+ * Automatically extracts the 10-character Indian PAN from a 15-character GSTIN.
+ * GSTIN structure: 2 digits State Code + 10 characters PAN (chars 3 to 12) + 1 entity code + 'Z' + 1 check digit.
+ * Example: 27AAACR5055K1Z8 -> AAACR5055K
+ */
+export function extractPanFromGstin(gstin?: string): string {
+  if (!gstin) return '';
+  const cleaned = gstin.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (cleaned.length >= 12) {
+    const candidate = cleaned.slice(2, 12);
+    // Standard PAN format: 5 letters, 4 digits, 1 letter
+    if (/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(candidate)) {
+      return candidate;
+    }
+    if (candidate.length === 10) {
+      return candidate;
+    }
+  }
+  return '';
+}
+
+// ================= AUTOMATIC MASTER INGESTION =================
+
+export interface AutoStoreResult {
+  addedParties: number;
+  addedVehicles: number;
+  addedTransporters: number;
+  addedRoutes: number;
+  addedDrivers: number;
+  addedCommodities: number;
+  totalAdded: number;
+  details: string[];
+}
+
+/**
+ * Inspects a newly created or updated dispatch record, and automatically stores
+ * any unrecognized Parties, Vehicles, Transporters, Drivers, Routes, and Commodities
+ * directly into Masters so future entries auto-fill smoothly.
+ */
+export function autoStoreDispatchIntoMasters(dispatch: DispatchRecord): AutoStoreResult {
+  const masters = getMasters();
+  const updatedMasters: AllMasters = {
+    ...masters,
+    parties: [...masters.parties],
+    vehicles: [...masters.vehicles],
+    transporters: [...masters.transporters],
+    routes: [...masters.routes],
+    drivers: [...masters.drivers],
+    commodities: [...masters.commodities],
+  };
+
+  const details: string[] = [];
+  let addedParties = 0;
+  let addedVehicles = 0;
+  let addedTransporters = 0;
+  let addedRoutes = 0;
+  let addedDrivers = 0;
+  let addedCommodities = 0;
+
+  // 1. Process Parties: fromParty (Consignor), toParty (Consignee), and LR consignors/consignees
+  const partyEntries: { name: string; type: 'Consignor' | 'Consignee'; city?: string }[] = [];
+
+  if (dispatch.fromParty && dispatch.fromParty.trim()) {
+    partyEntries.push({ 
+      name: dispatch.fromParty.trim(), 
+      type: 'Consignor', 
+      city: dispatch.lrs?.[0]?.consignorCity || '' 
+    });
+  }
+  if (dispatch.toParty && dispatch.toParty.trim()) {
+    partyEntries.push({ 
+      name: dispatch.toParty.trim(), 
+      type: 'Consignee', 
+      city: dispatch.lrs?.[0]?.consigneeCity || '' 
+    });
+  }
+
+  for (const lr of dispatch.lrs || []) {
+    if (lr.consignorName && lr.consignorName.trim()) {
+      partyEntries.push({ 
+        name: lr.consignorName.trim(), 
+        type: 'Consignor', 
+        city: lr.consignorCity || '' 
+      });
+    }
+    if (lr.consigneeName && lr.consigneeName.trim()) {
+      partyEntries.push({ 
+        name: lr.consigneeName.trim(), 
+        type: 'Consignee', 
+        city: lr.consigneeCity || '' 
+      });
+    }
+  }
+
+  for (const entry of partyEntries) {
+    const existingIndex = updatedMasters.parties.findIndex(
+      (p) => p.name.toLowerCase().trim() === entry.name.toLowerCase().trim()
+    );
+
+    if (existingIndex === -1) {
+      // Create new Party
+      const newParty: PartyMaster = {
+        id: generateSafeId('pty'),
+        name: entry.name,
+        type: entry.type,
+        city: entry.city || 'Hub Location',
+        state: 'India',
+        defaultPaymentTerms: entry.type === 'Consignor' ? '30 Days Net' : '15 Days / To Pay',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      updatedMasters.parties.unshift(newParty);
+      addedParties++;
+      details.push(`Party: ${entry.name} (${entry.type})`);
+    } else {
+      // If already exists but was Consignor and now also Consignee, upgrade to 'Both'
+      const existing = updatedMasters.parties[existingIndex];
+      if (existing.type !== 'Both' && existing.type !== entry.type) {
+        updatedMasters.parties[existingIndex] = {
+          ...existing,
+          type: 'Both',
+          city: existing.city || entry.city || '',
+          updatedAt: new Date().toISOString(),
+        };
+      }
+    }
+  }
+
+  // 2. Process Vehicle
+  if (dispatch.vehicleNumber && dispatch.vehicleNumber.trim()) {
+    const cleanVeh = dispatch.vehicleNumber.trim().toUpperCase();
+    const existingVeh = updatedMasters.vehicles.find(
+      (v) => normalizeVehicleNo(v.vehicleNumber) === normalizeVehicleNo(cleanVeh)
+    );
+
+    if (!existingVeh) {
+      const tonnage = dispatch.totalWeight > 0 ? Math.ceil(dispatch.totalWeight) : 25;
+      const newVehicle: VehicleMaster = {
+        id: generateSafeId('veh'),
+        vehicleNumber: cleanVeh,
+        placement: dispatch.placement || 'Market',
+        capacityMT: tonnage,
+        vehicleType: tonnage >= 24 ? '14 Wheeler Multi-Axle (25 MT)' : tonnage >= 16 ? '32 Ft MXL Container (18 MT)' : 'Taurus 20 Ft (16 MT)',
+        transporterName: dispatch.transporterName?.trim() || '',
+        driverName: dispatch.driverName?.trim() || '',
+        driverPhone: dispatch.driverPhone?.trim() || '',
+        status: 'Active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      updatedMasters.vehicles.unshift(newVehicle);
+      addedVehicles++;
+      details.push(`Vehicle: ${cleanVeh}`);
+    }
+  }
+
+  // 3. Process Transporter
+  if (dispatch.transporterName && dispatch.transporterName.trim()) {
+    const cleanTrn = dispatch.transporterName.trim();
+    const existingTrn = updatedMasters.transporters.find(
+      (t) => t.name.toLowerCase().trim() === cleanTrn.toLowerCase().trim()
+    );
+
+    if (!existingTrn) {
+      const avgCommission = dispatch.totalMarketCommission 
+        ? Math.round(dispatch.totalMarketCommission / Math.max(dispatch.lrs?.length || 1, 1))
+        : 500;
+
+      const newTransporter: TransporterMaster = {
+        id: generateSafeId('trn'),
+        name: cleanTrn,
+        status: 'Active',
+        defaultCommission: avgCommission,
+        defaultAdvancePercent: 70,
+        tdsDeclaration: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      updatedMasters.transporters.unshift(newTransporter);
+      addedTransporters++;
+      details.push(`Transporter: ${cleanTrn}`);
+    }
+  }
+
+  // 4. Process Driver
+  if (dispatch.driverName && dispatch.driverName.trim()) {
+    const cleanDrv = dispatch.driverName.trim();
+    const existingDrv = updatedMasters.drivers.find(
+      (d) => d.name.toLowerCase().trim() === cleanDrv.toLowerCase().trim()
+    );
+
+    if (!existingDrv) {
+      const newDriver: DriverMaster = {
+        id: generateSafeId('drv'),
+        name: cleanDrv,
+        phone: dispatch.driverPhone?.trim() || '',
+        associatedVehicle: dispatch.vehicleNumber?.trim() || '',
+        status: 'Active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      updatedMasters.drivers.unshift(newDriver);
+      addedDrivers++;
+      details.push(`Driver: ${cleanDrv}`);
+    }
+  }
+
+  // 5. Process Corridor / Route
+  const originCity = dispatch.lrs?.[0]?.consignorCity || dispatch.fromParty?.trim();
+  const destCity = dispatch.lrs?.[0]?.consigneeCity || dispatch.toParty?.trim();
+
+  if (originCity && destCity && originCity.toLowerCase() !== destCity.toLowerCase()) {
+    const existingRoute = updatedMasters.routes.find((r) => {
+      const o1 = r.origin.toLowerCase().trim();
+      const d1 = r.destination.toLowerCase().trim();
+      const o2 = originCity.toLowerCase().trim();
+      const d2 = destCity.toLowerCase().trim();
+      return (o1 === o2 || o1.includes(o2) || o2.includes(o1)) &&
+             (d1 === d2 || d1.includes(d2) || d2.includes(d1));
+    });
+
+    if (!existingRoute) {
+      const avgRate = dispatch.lrs?.[0]?.rate || 2400;
+      const newRoute: RouteMaster = {
+        id: generateSafeId('rt'),
+        origin: originCity,
+        destination: destCity,
+        distanceKm: 500,
+        transitDays: 2,
+        benchmarkRatePerMT: avgRate > 0 ? Math.round(avgRate) : 2400,
+        primaryHighways: 'National Corridor',
+        standardCommission: 500,
+        defaultAdvancePercent: 70,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      updatedMasters.routes.unshift(newRoute);
+      addedRoutes++;
+      details.push(`Corridor: ${originCity} ➔ ${destCity}`);
+    }
+  }
+
+  // 6. Process Commodities from LR remarks
+  for (const lr of dispatch.lrs || []) {
+    if (lr.remarks && lr.remarks.trim().length >= 3) {
+      const cargo = lr.remarks.trim();
+      // Skip if looks like a standard note
+      if (!cargo.toLowerCase().includes('freight') && !cargo.toLowerCase().includes('payment')) {
+        const existingCmd = updatedMasters.commodities.find(
+          (c) => c.name.toLowerCase().trim() === cargo.toLowerCase().trim()
+        );
+        if (!existingCmd) {
+          const newCmd: CommodityMaster = {
+            id: generateSafeId('cmd'),
+            name: cargo,
+            defaultWeightUnit: lr.weightUnit || 'MT',
+            defaultRateType: lr.rateType || 'per_mt',
+            packagingType: 'Commercial Transport',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          updatedMasters.commodities.unshift(newCmd);
+          addedCommodities++;
+          details.push(`Commodity: ${cargo}`);
+        }
+      }
+    }
+  }
+
+  const totalAdded = addedParties + addedVehicles + addedTransporters + addedRoutes + addedDrivers + addedCommodities;
+
+  if (totalAdded > 0) {
+    saveMasters(updatedMasters);
+  }
+
+  return {
+    addedParties,
+    addedVehicles,
+    addedTransporters,
+    addedRoutes,
+    addedDrivers,
+    addedCommodities,
+    totalAdded,
+    details,
+  };
+}
+
+/**
+ * Scans an entire list of dispatches and automatically synchronizes
+ * any missing parties, vehicles, transporters, routes, and commodities to Masters.
+ */
+export function batchSyncDispatchesToMasters(dispatches: DispatchRecord[]): AutoStoreResult {
+  let addedParties = 0;
+  let addedVehicles = 0;
+  let addedTransporters = 0;
+  let addedRoutes = 0;
+  let addedDrivers = 0;
+  let addedCommodities = 0;
+  const allDetails: string[] = [];
+
+  for (const d of dispatches) {
+    const res = autoStoreDispatchIntoMasters(d);
+    addedParties += res.addedParties;
+    addedVehicles += res.addedVehicles;
+    addedTransporters += res.addedTransporters;
+    addedRoutes += res.addedRoutes;
+    addedDrivers += res.addedDrivers;
+    addedCommodities += res.addedCommodities;
+    allDetails.push(...res.details);
+  }
+
+  return {
+    addedParties,
+    addedVehicles,
+    addedTransporters,
+    addedRoutes,
+    addedDrivers,
+    addedCommodities,
+    totalAdded: addedParties + addedVehicles + addedTransporters + addedRoutes + addedDrivers + addedCommodities,
+    details: allDetails,
+  };
+}
+
+// ================= BACKUP & RESTORE WITH OVERWRITE / MERGE =================
+
+/**
+ * Restores Masters dataset from backup with either full Overwrite or Merge mode.
+ * @param newMasters The imported Masters dataset
+ * @param mode 'overwrite' will completely replace current Masters; 'merge' updates or appends records.
+ */
+export function restoreMasters(
+  newMasters: AllMasters,
+  mode: 'overwrite' | 'merge' = 'overwrite'
+): AllMasters {
+  if (mode === 'overwrite') {
+    saveMasters(newMasters);
+    return newMasters;
+  }
+
+  // Merge Mode
+  const current = getMasters();
+
+  // Merge Parties by normalized name
+  const partyMap = new Map<string, PartyMaster>();
+  for (const p of current.parties) partyMap.set(p.name.toLowerCase().trim(), p);
+  for (const p of newMasters.parties || []) {
+    const key = p.name.toLowerCase().trim();
+    if (partyMap.has(key)) {
+      partyMap.set(key, { ...partyMap.get(key)!, ...p, updatedAt: new Date().toISOString() });
+    } else {
+      partyMap.set(key, p);
+    }
+  }
+
+  // Merge Vehicles by normalized registration
+  const vehMap = new Map<string, VehicleMaster>();
+  for (const v of current.vehicles) vehMap.set(normalizeVehicleNo(v.vehicleNumber), v);
+  for (const v of newMasters.vehicles || []) {
+    const key = normalizeVehicleNo(v.vehicleNumber);
+    if (vehMap.has(key)) {
+      vehMap.set(key, { ...vehMap.get(key)!, ...v, updatedAt: new Date().toISOString() });
+    } else {
+      vehMap.set(key, v);
+    }
+  }
+
+  // Merge Transporters by name
+  const trnMap = new Map<string, TransporterMaster>();
+  for (const t of current.transporters) trnMap.set(t.name.toLowerCase().trim(), t);
+  for (const t of newMasters.transporters || []) {
+    const key = t.name.toLowerCase().trim();
+    if (trnMap.has(key)) {
+      trnMap.set(key, { ...trnMap.get(key)!, ...t, updatedAt: new Date().toISOString() });
+    } else {
+      trnMap.set(key, t);
+    }
+  }
+
+  // Merge Routes by Origin + Destination
+  const routeMap = new Map<string, RouteMaster>();
+  for (const r of current.routes) routeMap.set(`${r.origin.toLowerCase().trim()}::${r.destination.toLowerCase().trim()}`, r);
+  for (const r of newMasters.routes || []) {
+    const key = `${r.origin.toLowerCase().trim()}::${r.destination.toLowerCase().trim()}`;
+    if (routeMap.has(key)) {
+      routeMap.set(key, { ...routeMap.get(key)!, ...r, updatedAt: new Date().toISOString() });
+    } else {
+      routeMap.set(key, r);
+    }
+  }
+
+  // Merge Drivers by name
+  const drvMap = new Map<string, DriverMaster>();
+  for (const d of current.drivers) drvMap.set(d.name.toLowerCase().trim(), d);
+  for (const d of newMasters.drivers || []) {
+    const key = d.name.toLowerCase().trim();
+    if (drvMap.has(key)) {
+      drvMap.set(key, { ...drvMap.get(key)!, ...d, updatedAt: new Date().toISOString() });
+    } else {
+      drvMap.set(key, d);
+    }
+  }
+
+  // Merge Commodities by name
+  const cmdMap = new Map<string, CommodityMaster>();
+  for (const c of current.commodities) cmdMap.set(c.name.toLowerCase().trim(), c);
+  for (const c of newMasters.commodities || []) {
+    const key = c.name.toLowerCase().trim();
+    if (cmdMap.has(key)) {
+      cmdMap.set(key, { ...cmdMap.get(key)!, ...c, updatedAt: new Date().toISOString() });
+    } else {
+      cmdMap.set(key, c);
+    }
+  }
+
+  const merged: AllMasters = {
+    parties: Array.from(partyMap.values()),
+    vehicles: Array.from(vehMap.values()),
+    transporters: Array.from(trnMap.values()),
+    routes: Array.from(routeMap.values()),
+    drivers: Array.from(drvMap.values()),
+    commodities: Array.from(cmdMap.values()),
+    lastUpdated: new Date().toISOString(),
+  };
+
+  saveMasters(merged);
+  return merged;
 }

@@ -32,6 +32,13 @@ import { AuthModal } from './components/AuthModal';
 import { MastersView } from './components/MastersView';
 import { CheckCircle2, AlertCircle, RefreshCw, X, Sparkles } from 'lucide-react';
 import { generateSafeId } from './lib/calculations';
+import { 
+  getMasters, 
+  autoStoreDispatchIntoMasters, 
+  restoreMasters, 
+  batchSyncDispatchesToMasters 
+} from './lib/mastersService';
+import { AllMasters } from './types/masters';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -174,14 +181,22 @@ export default function App() {
       setRecords(all);
       updatePendingCount();
 
+      // AUTOMATICALLY STORE NEW ENTRIES IN MASTERS
+      const autoStoreRes = autoStoreDispatchIntoMasters(record);
+
       setEditingRecord(null);
       setActiveTab('list');
 
+      let masterMsg = '';
+      if (autoStoreRes.totalAdded > 0) {
+        masterMsg = ` (${autoStoreRes.totalAdded} new item(s) auto-stored in Masters)`;
+      }
+
       if (result.synced) {
-        showNotification(`Vehicle dispatch ${record.vehicleNumber} saved and synced to database!`, 'success');
+        showNotification(`Vehicle dispatch ${record.vehicleNumber} saved and synced to database!${masterMsg}`, 'success');
       } else {
         showNotification(
-          `Vehicle dispatch ${record.vehicleNumber} saved locally! It will sync when connected.`,
+          `Vehicle dispatch ${record.vehicleNumber} saved locally! It will sync when connected.${masterMsg}`,
           'info'
         );
       }
@@ -259,32 +274,48 @@ export default function App() {
   };
 
   const handleBackupData = () => {
-    if (records.length === 0) {
-      showNotification('No records available to backup.', 'info');
-      return;
-    }
+    const currentMasters = getMasters();
+    const totalMastersCount =
+      currentMasters.parties.length +
+      currentMasters.vehicles.length +
+      currentMasters.transporters.length +
+      currentMasters.routes.length +
+      currentMasters.drivers.length +
+      currentMasters.commodities.length;
 
     const backupPayload = {
       app: 'LogiTrack - Transport & LR Management',
-      version: '2.0',
+      version: '2.5',
       exportedAt: new Date().toISOString(),
       exportedBy: appUser?.username || user?.email || 'operator',
       totalDispatchesCount: records.length,
+      totalMastersCount,
       dispatches: records,
+      masters: currentMasters,
+      settings: {
+        activeTheme,
+      },
     };
 
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupPayload, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `LogiTrack_Backup_${new Date().toISOString().split('T')[0]}.json`);
+    downloadAnchor.setAttribute('download', `LogiTrack_Full_Backup_${new Date().toISOString().split('T')[0]}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     document.body.removeChild(downloadAnchor);
 
-    showNotification(`Complete JSON backup with ${records.length} records downloaded!`, 'success');
+    showNotification(
+      `Complete JSON backup with ${records.length} dispatches and ${totalMastersCount} master records downloaded!`,
+      'success'
+    );
   };
 
-  const handleRestoreData = async (restoredRecords: DispatchRecord[], mode: 'replace' | 'merge') => {
+  const handleRestoreData = async (
+    restoredRecords: DispatchRecord[], 
+    mode: 'replace' | 'merge',
+    restoredMasters?: AllMasters
+  ) => {
     try {
       let finalRecords: DispatchRecord[] = [];
 
@@ -302,13 +333,30 @@ export default function App() {
       setRecords(finalRecords);
       updatePendingCount();
 
+      // If backup includes masters, restore masters with the same mode (overwrite/replace vs merge)
+      let masterNote = '';
+      if (restoredMasters) {
+        const updatedMasters = restoreMasters(restoredMasters, mode === 'replace' ? 'overwrite' : 'merge');
+        const count = 
+          updatedMasters.parties.length +
+          updatedMasters.vehicles.length +
+          updatedMasters.transporters.length +
+          updatedMasters.routes.length +
+          updatedMasters.drivers.length +
+          updatedMasters.commodities.length;
+        masterNote = ` and ${count} Master records`;
+      }
+
+      // Also auto-sync restored dispatches into masters
+      batchSyncDispatchesToMasters(restoredRecords);
+
       // Queue and sync to Firestore
       for (const rec of restoredRecords) {
         await persistDispatch(rec, isOnline);
       }
 
       showNotification(
-        `Successfully restored ${restoredRecords.length} records via ${mode === 'replace' ? 'replacement' : 'merge'}!`,
+        `Successfully restored ${restoredRecords.length} records${masterNote} via ${mode === 'replace' ? 'complete overwrite & replacement' : 'safe merge'}!`,
         'success'
       );
     } catch (err: any) {
@@ -535,6 +583,7 @@ export default function App() {
         {/* TAB 5: Masters Data Center (Auto-fill, Automations & Gemini AI Corridor Benchmark) */}
         {activeTab === 'masters' && (
           <MastersView
+            dispatches={records}
             showNotification={showNotification}
           />
         )}

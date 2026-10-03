@@ -4,12 +4,21 @@ export interface PartyMaster {
   type: 'Consignor' | 'Consignee' | 'Both';
   city: string;
   state: string;
+  pincode?: string;
   gstin?: string;
+  panNumber?: string; // Auto-derived from GSTIN (chars 3 to 12) or manually entered
   address?: string;
   contactPerson?: string;
   phone?: string;
   email?: string;
   defaultPaymentTerms?: string;
+  // Optional Bank Account Details
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankIfsc?: string;
+  bankBranch?: string;
+  accountHolderName?: string;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
 }

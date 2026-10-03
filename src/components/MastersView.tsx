@@ -8,10 +8,14 @@ import {
   CommodityMaster, 
   AllMasters 
 } from '../types/masters';
+import { DispatchRecord } from '../types/dispatch';
 import { 
   getMasters, 
   saveMasters, 
-  resetMastersToDefaults 
+  resetMastersToDefaults,
+  extractPanFromGstin,
+  restoreMasters,
+  batchSyncDispatchesToMasters
 } from '../lib/mastersService';
 import { analyzeRouteWithMaps } from '../lib/geminiService';
 import { generateSafeId, formatCurrency } from '../lib/calculations';
@@ -41,10 +45,16 @@ import {
   Percent,
   TrendingUp,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Landmark,
+  CheckCircle2,
+  FileJson,
+  Layers,
+  Copy
 } from 'lucide-react';
 
 interface MastersViewProps {
+  dispatches?: DispatchRecord[];
   onMastersUpdated?: (updated: AllMasters) => void;
   showNotification: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -52,6 +62,7 @@ interface MastersViewProps {
 type MasterCategory = 'parties' | 'vehicles' | 'transporters' | 'routes' | 'drivers' | 'commodities';
 
 export const MastersView: React.FC<MastersViewProps> = ({
+  dispatches = [],
   onMastersUpdated,
   showNotification,
 }) => {
@@ -62,6 +73,21 @@ export const MastersView: React.FC<MastersViewProps> = ({
   // Modal State for Add / Edit
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
+
+  // Backup & Restore with Overwrite / Merge
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [restorePreview, setRestorePreview] = useState<{
+    masters: AllMasters;
+    partiesCount: number;
+    vehiclesCount: number;
+    transportersCount: number;
+    routesCount: number;
+    driversCount: number;
+    commoditiesCount: number;
+    totalRecords: number;
+  } | null>(null);
+  const [restoreMode, setRestoreMode] = useState<'overwrite' | 'merge'>('overwrite');
+  const [restoreError, setRestoreError] = useState<string | null>(null);
 
   // Gemini AI Corridor Benchmarker State inside Masters
   const [isAiBenchmarkerOpen, setIsAiBenchmarkerOpen] = useState(false);
@@ -95,22 +121,31 @@ export const MastersView: React.FC<MastersViewProps> = ({
   const handleExportJSON = () => {
     const payload = {
       app: 'LogiTrack Transport Masters',
-      version: '2.0',
+      version: '2.5',
       exportedAt: new Date().toISOString(),
+      totalMasters: {
+        parties: masters.parties.length,
+        vehicles: masters.vehicles.length,
+        transporters: masters.transporters.length,
+        routes: masters.routes.length,
+        drivers: masters.drivers.length,
+        commodities: masters.commodities.length,
+      },
       masters,
     };
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `LogiTrack_Masters_${new Date().toISOString().split('T')[0]}.json`);
+    downloadAnchor.setAttribute('download', `LogiTrack_Masters_Backup_${new Date().toISOString().split('T')[0]}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     document.body.removeChild(downloadAnchor);
-    showNotification('Masters dataset exported to JSON file.', 'success');
+    showNotification('Masters dataset exported to JSON backup file.', 'success');
   };
 
-  // Import masters from JSON file
-  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Import / Select backup file for Restore
+  const handleFileSelectForRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setRestoreError(null);
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -118,18 +153,89 @@ export const MastersView: React.FC<MastersViewProps> = ({
     reader.onload = (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
-        const importedMasters = parsed.masters || parsed;
-        if (!importedMasters.parties || !importedMasters.vehicles) {
-          throw new Error('Invalid masters JSON format.');
+        const candidate: AllMasters = parsed.masters || parsed;
+
+        if (!candidate || (!Array.isArray(candidate.parties) && !Array.isArray(candidate.vehicles))) {
+          throw new Error('Selected file does not contain valid LogiTrack Master data.');
         }
-        persistChanges(importedMasters);
-        showNotification('Masters imported successfully with full records.', 'success');
+
+        const validMasters: AllMasters = {
+          parties: Array.isArray(candidate.parties) ? candidate.parties : [],
+          vehicles: Array.isArray(candidate.vehicles) ? candidate.vehicles : [],
+          transporters: Array.isArray(candidate.transporters) ? candidate.transporters : [],
+          routes: Array.isArray(candidate.routes) ? candidate.routes : [],
+          drivers: Array.isArray(candidate.drivers) ? candidate.drivers : [],
+          commodities: Array.isArray(candidate.commodities) ? candidate.commodities : [],
+          lastUpdated: candidate.lastUpdated || new Date().toISOString(),
+        };
+
+        const totalRecords =
+          validMasters.parties.length +
+          validMasters.vehicles.length +
+          validMasters.transporters.length +
+          validMasters.routes.length +
+          validMasters.drivers.length +
+          validMasters.commodities.length;
+
+        if (totalRecords === 0) {
+          throw new Error('Backup file contains 0 master records.');
+        }
+
+        setRestorePreview({
+          masters: validMasters,
+          partiesCount: validMasters.parties.length,
+          vehiclesCount: validMasters.vehicles.length,
+          transportersCount: validMasters.transporters.length,
+          routesCount: validMasters.routes.length,
+          driversCount: validMasters.drivers.length,
+          commoditiesCount: validMasters.commodities.length,
+          totalRecords,
+        });
+        setIsRestoreModalOpen(true);
       } catch (err: any) {
-        showNotification(err?.message || 'Failed to import masters JSON.', 'error');
+        showNotification(err?.message || 'Failed to read Masters backup JSON.', 'error');
       }
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  // Execute Masters Restore via Overwrite or Merge
+  const handleExecuteMastersRestore = () => {
+    if (!restorePreview) return;
+    try {
+      const restored = restoreMasters(restorePreview.masters, restoreMode);
+      persistChanges(restored);
+      setIsRestoreModalOpen(false);
+      setRestorePreview(null);
+      showNotification(
+        `Successfully restored ${restorePreview.totalRecords} master items via ${
+          restoreMode === 'overwrite' ? 'complete overwrite & replacement' : 'safe merge'
+        }!`,
+        'success'
+      );
+    } catch (err: any) {
+      setRestoreError(err?.message || 'Restore failed.');
+    }
+  };
+
+  // Auto-sync / scan all dispatches into Masters
+  const handleAutoSyncFromDispatches = () => {
+    if (!dispatches || dispatches.length === 0) {
+      showNotification('No dispatches currently available to sync into Masters.', 'info');
+      return;
+    }
+    const result = batchSyncDispatchesToMasters(dispatches);
+    if (result.totalAdded > 0) {
+      const refreshed = getMasters();
+      persistChanges(refreshed);
+      showNotification(
+        `Auto-stored ${result.totalAdded} new entries in Masters! (${result.addedParties} Parties, ${result.addedVehicles} Vehicles, ${result.addedTransporters} Transporters, ${result.addedRoutes} Corridors)`,
+        'success'
+      );
+    } else {
+      showNotification('All parties, vehicles, transporters, and routes from dispatches are already up to date in Masters!', 'info');
+    }
   };
 
   // Delete an item
@@ -229,8 +335,15 @@ export const MastersView: React.FC<MastersViewProps> = ({
       (p) =>
         p.name.toLowerCase().includes(q) ||
         p.city.toLowerCase().includes(q) ||
+        p.state.toLowerCase().includes(q) ||
+        (p.pincode && p.pincode.includes(q)) ||
         (p.gstin && p.gstin.toLowerCase().includes(q)) ||
-        (p.contactPerson && p.contactPerson.toLowerCase().includes(q))
+        (p.panNumber && p.panNumber.toLowerCase().includes(q)) ||
+        (p.address && p.address.toLowerCase().includes(q)) ||
+        (p.contactPerson && p.contactPerson.toLowerCase().includes(q)) ||
+        (p.phone && p.phone.includes(q)) ||
+        (p.bankName && p.bankName.toLowerCase().includes(q)) ||
+        (p.bankAccountNumber && p.bankAccountNumber.includes(q))
     );
   }, [masters.parties, searchQuery]);
 
@@ -315,6 +428,17 @@ export const MastersView: React.FC<MastersViewProps> = ({
 
         {/* Global Master Operations */}
         <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+          {/* Auto-Sync from Dispatches */}
+          <button
+            type="button"
+            onClick={handleAutoSyncFromDispatches}
+            className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-950 border border-emerald-300 font-black text-xs flex items-center space-x-1.5 shadow-xs transition-all cursor-pointer"
+            title="Scan all dispatches and auto-store new parties, vehicles, transporters, and routes into Masters"
+          >
+            <Sparkles className="h-4 w-4 text-emerald-700" />
+            <span>Auto-Sync from Dispatches</span>
+          </button>
+
           {/* Gemini AI Corridor Benchmarker Trigger */}
           <button
             type="button"
@@ -322,24 +446,26 @@ export const MastersView: React.FC<MastersViewProps> = ({
             className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-cyan-500/10 text-slate-900 border border-emerald-400 font-black text-xs flex items-center space-x-1.5 shadow-xs hover:bg-emerald-50 transition-all cursor-pointer"
             title="Generate Corridors and Rate Benchmarks with Gemini AI & Google Maps"
           >
-            <Sparkles className="h-4 w-4 text-emerald-700" />
+            <Route className="h-4 w-4 text-emerald-700" />
             <span>AI Corridor Benchmarker</span>
           </button>
 
+          {/* Export JSON Backup */}
           <button
             type="button"
             onClick={handleExportJSON}
-            className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-950 border border-slate-200 text-xs font-bold flex items-center space-x-1 shadow-xs transition-colors"
-            title="Export Masters to JSON"
+            className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-950 border border-slate-200 text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors"
+            title="Export Masters to JSON Backup"
           >
             <Download className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Export</span>
+            <span className="hidden sm:inline">Export Backup</span>
           </button>
 
-          <label className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-950 border border-slate-200 text-xs font-bold flex items-center space-x-1 shadow-xs transition-colors cursor-pointer">
+          {/* Restore with Overwrite / Merge */}
+          <label className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-950 border border-slate-200 text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer" title="Restore Masters dataset with Overwrite or Merge mode">
             <Upload className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Import</span>
-            <input type="file" accept=".json" onChange={handleImportJSON} className="hidden" />
+            <span className="hidden sm:inline">Restore (Overwrite / Merge)</span>
+            <input type="file" accept=".json" onChange={handleFileSelectForRestore} className="hidden" />
           </label>
 
           <button
@@ -586,80 +712,172 @@ export const MastersView: React.FC<MastersViewProps> = ({
             <table className="w-full text-left text-xs">
               <thead className="bg-[#F8FAFC] border-b border-slate-200 text-slate-600 font-extrabold uppercase tracking-wider text-[11px]">
                 <tr>
-                  <th className="py-3 px-4">Party Name</th>
-                  <th className="py-3 px-4">Role / Type</th>
-                  <th className="py-3 px-4">City / State</th>
-                  <th className="py-3 px-4">GSTIN</th>
-                  <th className="py-3 px-4">Contact</th>
-                  <th className="py-3 px-4">Payment Terms</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <th className="py-3 px-4 min-w-[180px]">Party Name & Role</th>
+                  <th className="py-3 px-4 min-w-[160px]">GSTIN & PAN Details</th>
+                  <th className="py-3 px-4 min-w-[220px]">Facility / Billing Address (Wrap Text)</th>
+                  <th className="py-3 px-4 min-w-[140px]">City, State & PIN</th>
+                  <th className="py-3 px-4 min-w-[180px]">Bank Account (Optional)</th>
+                  <th className="py-3 px-4 min-w-[140px]">Contact Person</th>
+                  <th className="py-3 px-4 min-w-[110px]">Payment Terms</th>
+                  <th className="py-3 px-4 text-right min-w-[80px]">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredParties.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-500 font-medium">
+                    <td colSpan={8} className="py-12 text-center text-slate-500 font-medium">
                       No parties match your search query.
                     </td>
                   </tr>
                 ) : (
-                  filteredParties.map((pty) => (
-                    <tr key={pty.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-black text-slate-950 text-sm">
-                        {pty.name}
-                        {pty.address && (
-                          <div className="text-[11px] text-slate-500 font-normal truncate max-w-xs">
-                            {pty.address}
+                  filteredParties.map((pty) => {
+                    const derivedPan = extractPanFromGstin(pty.gstin);
+                    const effectivePan = pty.panNumber || derivedPan;
+                    const isAutoPan = derivedPan && effectivePan === derivedPan;
+
+                    return (
+                      <tr key={pty.id} className="hover:bg-slate-50/80 transition-colors align-top">
+                        {/* Party Name & Role */}
+                        <td className="py-3 px-4">
+                          <div className="font-black text-slate-950 text-sm">
+                            {pty.name}
                           </div>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase tracking-wider ${
-                          pty.type === 'Consignor'
-                            ? 'bg-emerald-100 text-emerald-950 border border-emerald-300'
-                            : pty.type === 'Consignee'
-                            ? 'bg-sky-100 text-sky-950 border border-sky-300'
-                            : 'bg-purple-100 text-purple-950 border border-purple-300'
-                        }`}>
-                          {pty.type}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-slate-800">
-                        {pty.city}, {pty.state}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-bold text-slate-700">
-                        {pty.gstin || '-'}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-slate-900">{pty.contactPerson || '-'}</div>
-                        <div className="text-slate-500 font-mono text-[11px]">{pty.phone || '-'}</div>
-                      </td>
-                      <td className="py-3 px-4 text-slate-600 font-medium">
-                        {pty.defaultPaymentTerms || 'Standard'}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end space-x-1">
-                          <button
-                            onClick={() => {
-                              setEditingItem(pty);
-                              setIsModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg text-indigo-700 hover:bg-indigo-50"
-                            title="Edit Party"
-                          >
-                            <Edit3 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteItem(pty.id, pty.name)}
-                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50"
-                            title="Delete Party"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                          <div className="mt-1">
+                            <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase tracking-wider ${
+                              pty.type === 'Consignor'
+                                ? 'bg-emerald-100 text-emerald-950 border border-emerald-300'
+                                : pty.type === 'Consignee'
+                                ? 'bg-sky-100 text-sky-950 border border-sky-300'
+                                : 'bg-purple-100 text-purple-950 border border-purple-300'
+                            }`}>
+                              {pty.type}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* GSTIN & PAN Details with Auto-Fetch */}
+                        <td className="py-3 px-4 font-mono">
+                          <div className="space-y-1">
+                            {pty.gstin ? (
+                              <div className="flex items-center space-x-1.5">
+                                <span className="text-[9px] uppercase font-sans font-bold text-slate-400">GST:</span>
+                                <span className="font-bold text-slate-900 text-xs tracking-tight">
+                                  {pty.gstin}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 font-sans italic text-[11px]">No GSTIN</span>
+                            )}
+
+                            {effectivePan && (
+                              <div className="flex items-center space-x-1.5 pt-0.5">
+                                <span className="text-[9px] uppercase font-sans font-bold text-emerald-700">PAN:</span>
+                                <span className="font-bold text-emerald-950 bg-emerald-50 px-1.5 py-0.5 rounded text-[11px] border border-emerald-200">
+                                  {effectivePan}
+                                </span>
+                                {isAutoPan && (
+                                  <span className="text-[9px] font-sans font-black bg-emerald-100 text-emerald-800 px-1 rounded" title="Auto-extracted from GSTIN digits 3 to 12">
+                                    ⚡ Auto
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Address with Wrap Text */}
+                        <td className="py-3 px-4 max-w-xs">
+                          {pty.address ? (
+                            <div className="text-[11px] text-slate-700 font-medium whitespace-normal break-words leading-relaxed bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/70">
+                              {pty.address}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">No address specified</span>
+                          )}
+                        </td>
+
+                        {/* City, State & PIN */}
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-slate-900">
+                            {pty.city}, {pty.state}
+                          </div>
+                          {pty.pincode && (
+                            <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                              PIN: {pty.pincode}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Bank Account Details (Optional) */}
+                        <td className="py-3 px-4">
+                          {pty.bankAccountNumber ? (
+                            <div className="space-y-1 bg-slate-50/80 p-2 rounded-xl border border-slate-200/70">
+                              <div className="font-bold text-slate-900 flex items-center space-x-1.5 text-[11px]">
+                                <Landmark className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" />
+                                <span className="truncate">{pty.bankName || 'Bank Account'}</span>
+                              </div>
+                              <div className="font-mono text-[11px] text-slate-700">
+                                A/C: <span className="font-black text-slate-950">{pty.bankAccountNumber}</span>
+                              </div>
+                              <div className="flex items-center space-x-1 font-mono text-[10px] text-slate-600">
+                                {pty.bankIfsc && (
+                                  <span className="bg-slate-200/80 text-slate-800 px-1 rounded font-bold">
+                                    {pty.bankIfsc}
+                                  </span>
+                                )}
+                                {pty.bankBranch && (
+                                  <span className="truncate text-[10px] text-slate-500 font-sans">
+                                    • {pty.bankBranch}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">Optional / Not added</span>
+                          )}
+                        </td>
+
+                        {/* Contact Person & Phone */}
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-slate-900">{pty.contactPerson || '-'}</div>
+                          <div className="text-slate-500 font-mono text-[11px] mt-0.5">{pty.phone || '-'}</div>
+                          {pty.email && (
+                            <div className="text-slate-400 text-[10px] truncate max-w-[120px]">{pty.email}</div>
+                          )}
+                        </td>
+
+                        {/* Payment Terms */}
+                        <td className="py-3 px-4 text-slate-600 font-semibold">
+                          <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded text-[11px] border border-slate-200">
+                            {pty.defaultPaymentTerms || 'Standard'}
+                          </span>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end space-x-1">
+                            <button
+                              onClick={() => {
+                                setEditingItem(pty);
+                                setIsModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg text-indigo-700 hover:bg-indigo-50 transition-colors"
+                              title="Edit Party Details"
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteItem(pty.id, pty.name)}
+                              className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors"
+                              title="Delete Party"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1277,6 +1495,175 @@ export const MastersView: React.FC<MastersViewProps> = ({
           }}
         />
       )}
+
+      {/* RESTORE & BACKUP MASTERS MODAL (OVERWRITE & MERGE MODES) */}
+      {isRestoreModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-300 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Upload className="h-5 w-5 text-emerald-400" />
+                <h3 className="text-base font-black tracking-tight">
+                  Restore Masters Database
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  setIsRestoreModalOpen(false);
+                  setRestorePreview(null);
+                }}
+                className="p-1 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              {restorePreview && (
+                <>
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-slate-950 text-sm flex items-center space-x-1.5">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        <span>Backup File Validated</span>
+                      </span>
+                      <span className="font-mono text-emerald-800 font-black text-xs">
+                        {restorePreview.totalRecords} Total Records
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center pt-1 font-mono text-[11px]">
+                      <div className="bg-white p-2 rounded-lg border border-emerald-200">
+                        <span className="text-slate-500 block text-[9px] uppercase font-sans font-bold">Parties</span>
+                        <span className="font-bold text-slate-900">{restorePreview.partiesCount}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-emerald-200">
+                        <span className="text-slate-500 block text-[9px] uppercase font-sans font-bold">Vehicles</span>
+                        <span className="font-bold text-slate-900">{restorePreview.vehiclesCount}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-emerald-200">
+                        <span className="text-slate-500 block text-[9px] uppercase font-sans font-bold">Transporters</span>
+                        <span className="font-bold text-slate-900">{restorePreview.transportersCount}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-emerald-200">
+                        <span className="text-slate-500 block text-[9px] uppercase font-sans font-bold">Corridors</span>
+                        <span className="font-bold text-slate-900">{restorePreview.routesCount}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-emerald-200">
+                        <span className="text-slate-500 block text-[9px] uppercase font-sans font-bold">Drivers</span>
+                        <span className="font-bold text-slate-900">{restorePreview.driversCount}</span>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-emerald-200">
+                        <span className="text-slate-500 block text-[9px] uppercase font-sans font-bold">Commodities</span>
+                        <span className="font-bold text-slate-900">{restorePreview.commoditiesCount}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mode Selection */}
+                  <div className="space-y-2">
+                    <label className="block font-bold text-slate-900 text-xs">
+                      Select Restore & Ingestion Mode:
+                    </label>
+
+                    {/* OVERWRITE MODE */}
+                    <div
+                      onClick={() => setRestoreMode('overwrite')}
+                      className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                        restoreMode === 'overwrite'
+                          ? 'border-rose-500 bg-rose-50/70 ring-2 ring-rose-200'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            name="restore_mode"
+                            checked={restoreMode === 'overwrite'}
+                            onChange={() => setRestoreMode('overwrite')}
+                            className="text-rose-600 focus:ring-rose-500 h-4 w-4"
+                          />
+                          <strong className="text-slate-950 font-black text-xs">
+                            ⚡ Overwrite Existing Masters (Full Replace)
+                          </strong>
+                        </div>
+                        <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded bg-rose-200 text-rose-900">
+                          Overwrite
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 font-medium pl-6 mt-1">
+                        Completely erases current Master records and replaces them 100% with the backup file data.
+                      </p>
+                    </div>
+
+                    {/* MERGE MODE */}
+                    <div
+                      onClick={() => setRestoreMode('merge')}
+                      className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                        restoreMode === 'merge'
+                          ? 'border-[#00E676] bg-emerald-50/80 ring-2 ring-emerald-200'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            name="restore_mode"
+                            checked={restoreMode === 'merge'}
+                            onChange={() => setRestoreMode('merge')}
+                            className="text-emerald-600 focus:ring-[#00E676] h-4 w-4"
+                          />
+                          <strong className="text-slate-950 font-black text-xs">
+                            Merge & Update Existing Masters
+                          </strong>
+                        </div>
+                        <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded bg-emerald-200 text-emerald-950">
+                          Safe Merge
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 font-medium pl-6 mt-1">
+                        Preserves current records, updates any existing matching parties or vehicles, and appends new records.
+                      </p>
+                    </div>
+                  </div>
+
+                  {restoreError && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold rounded-xl flex items-center space-x-2">
+                      <AlertTriangle className="h-4 w-4 text-rose-600 flex-shrink-0" />
+                      <span>{restoreError}</span>
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex items-center justify-end space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRestoreModalOpen(false);
+                        setRestorePreview(null);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExecuteMastersRestore}
+                      className={`px-5 py-2 rounded-xl font-black text-xs sm:text-sm shadow-xs border transition-all ${
+                        restoreMode === 'overwrite'
+                          ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-700'
+                          : 'bg-[#00E676] hover:bg-[#00c864] text-slate-950 border-emerald-400'
+                      }`}
+                    >
+                      {restoreMode === 'overwrite' ? 'Proceed with Overwrite' : 'Proceed with Merge'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1301,7 +1688,25 @@ const MasterItemModal: React.FC<MasterItemModalProps> = ({
   const [formData, setFormData] = useState<any>(() => {
     if (editingItem) return { ...editingItem };
     if (category === 'parties') {
-      return { name: '', type: 'Consignor', city: '', state: '', gstin: '', contactPerson: '', phone: '', email: '', defaultPaymentTerms: '30 Days Net' };
+      return { 
+        name: '', 
+        type: 'Consignor', 
+        city: '', 
+        state: '', 
+        pincode: '',
+        gstin: '', 
+        panNumber: '',
+        address: '', 
+        contactPerson: '', 
+        phone: '', 
+        email: '', 
+        defaultPaymentTerms: '30 Days Net',
+        bankName: '',
+        bankAccountNumber: '',
+        bankIfsc: '',
+        bankBranch: '',
+        accountHolderName: ''
+      };
     }
     if (category === 'vehicles') {
       return { vehicleNumber: '', vehicleType: '14 Wheeler Multi-Axle (25 MT)', placement: 'Market', capacityMT: 25, transporterName: '', driverName: '', driverPhone: '', status: 'Active' };
@@ -1340,18 +1745,19 @@ const MasterItemModal: React.FC<MasterItemModalProps> = ({
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
           {category === 'parties' && (
             <>
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Company / Party Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Tata Steel BSL Ltd"
-                  value={formData.name || ''}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#00E676]"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+              {/* Company Name & Role Type */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">Company / Party Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Tata Steel BSL Ltd"
+                    value={formData.name || ''}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#00E676]"
+                  />
+                </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Role Type</label>
                   <select
@@ -1364,18 +1770,94 @@ const MasterItemModal: React.FC<MasterItemModalProps> = ({
                     <option value="Both">Both (Consignor & Consignee)</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">GSTIN</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 20AAACT2727Q1ZS"
-                    value={formData.gstin || ''}
-                    onChange={(e) => setFormData({ ...formData, gstin: e.target.value.toUpperCase() })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono uppercase font-bold"
-                  />
-                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+
+              {/* Tax Identifiers: GSTIN with instant PAN Auto-fetch */}
+              <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-slate-900 text-xs">Tax Identifiers & Compliance</span>
+                  <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+                    Auto-Fetch Active
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">GSTIN (15 Digits)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 20AAACT2727Q1ZS"
+                      value={formData.gstin || ''}
+                      onChange={(e) => {
+                        const gstinVal = e.target.value.toUpperCase();
+                        const autoPan = extractPanFromGstin(gstinVal);
+                        setFormData((prev: any) => ({
+                          ...prev,
+                          gstin: gstinVal,
+                          panNumber: autoPan || prev.panNumber,
+                        }));
+                      }}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono uppercase font-bold text-slate-950 focus:ring-2 focus:ring-[#00E676]"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-700">PAN Number (10 Digits)</label>
+                      {formData.gstin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const derived = extractPanFromGstin(formData.gstin);
+                            if (derived) {
+                              setFormData({ ...formData, panNumber: derived });
+                            }
+                          }}
+                          className="text-[10px] font-black text-emerald-700 hover:text-emerald-900 hover:underline"
+                        >
+                          ⚡ Auto-Fetch
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="e.g. AAACT2727Q"
+                      value={formData.panNumber || ''}
+                      onChange={(e) => setFormData({ ...formData, panNumber: e.target.value.toUpperCase() })}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono uppercase font-bold text-emerald-950 focus:ring-2 focus:ring-[#00E676]"
+                    />
+                  </div>
+                </div>
+
+                {formData.gstin && extractPanFromGstin(formData.gstin) === formData.panNumber && formData.panNumber && (
+                  <p className="text-[10px] text-emerald-700 font-semibold flex items-center space-x-1">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                    <span>PAN verified and auto-extracted from digits 3-12 of GSTIN.</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Address with Wrap Text */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700">
+                    Facility / Billing Address (Wrap Text)
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    Auto-wraps in table & printouts
+                  </span>
+                </div>
+                <textarea
+                  rows={2}
+                  placeholder="Enter full factory / warehouse address, industrial area, gate or plot number..."
+                  value={formData.address || ''}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-normal whitespace-normal focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#00E676] resize-y"
+                />
+              </div>
+
+              {/* Location: City, State, Pincode */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">City *</label>
                   <input
@@ -1398,13 +1880,25 @@ const MasterItemModal: React.FC<MasterItemModalProps> = ({
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-semibold"
                   />
                 </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">PIN Code</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 831001"
+                    value={formData.pincode || ''}
+                    onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono"
+                  />
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+
+              {/* Contact Person & Terms */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Contact Person</label>
                   <input
                     type="text"
-                    placeholder="Name"
+                    placeholder="Manager Name"
                     value={formData.contactPerson || ''}
                     onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
@@ -1414,11 +1908,85 @@ const MasterItemModal: React.FC<MasterItemModalProps> = ({
                   <label className="block font-bold text-slate-700 mb-1">Phone Number</label>
                   <input
                     type="text"
-                    placeholder="+91..."
+                    placeholder="+91 98321..."
                     value={formData.phone || ''}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono"
                   />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Payment Terms</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 30 Days Net"
+                    value={formData.defaultPaymentTerms || ''}
+                    onChange={(e) => setFormData({ ...formData, defaultPaymentTerms: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              {/* Bank Account Details (Optional) */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                <div className="flex items-center space-x-1.5 font-bold text-slate-800 text-xs">
+                  <Landmark className="h-4 w-4 text-emerald-600" />
+                  <span>Bank Account Details (Optional for direct RTGS/NEFT settlement)</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Bank Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. State Bank of India, HDFC"
+                      value={formData.bankName || ''}
+                      onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Account Number</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 38192019284"
+                      value={formData.bankAccountNumber || ''}
+                      onChange={(e) => setFormData({ ...formData, bankAccountNumber: e.target.value })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">IFSC Code</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. SBIN0001827"
+                      value={formData.bankIfsc || ''}
+                      onChange={(e) => setFormData({ ...formData, bankIfsc: e.target.value.toUpperCase() })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono uppercase font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Branch Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Bistupur Branch"
+                      value={formData.bankBranch || ''}
+                      onChange={(e) => setFormData({ ...formData, bankBranch: e.target.value })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">A/C Holder Name</label>
+                    <input
+                      type="text"
+                      placeholder={formData.name || 'Account Beneficiary'}
+                      value={formData.accountHolderName || ''}
+                      onChange={(e) => setFormData({ ...formData, accountHolderName: e.target.value })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-medium"
+                    />
+                  </div>
                 </div>
               </div>
             </>

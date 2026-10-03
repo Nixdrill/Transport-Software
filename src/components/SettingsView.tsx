@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { DispatchRecord } from '../types/dispatch';
+import { AllMasters } from '../types/masters';
 import { AVAILABLE_THEMES, ThemeConfig } from '../lib/theme';
 import { formatCurrency } from '../lib/calculations';
 import { exportToExcel, downloadExcelTemplate } from '../lib/excelService';
@@ -17,7 +18,8 @@ import {
   FileJson,
   FileSpreadsheet,
   ShieldAlert,
-  Sparkles
+  Sparkles,
+  Layers
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -25,7 +27,7 @@ interface SettingsViewProps {
   activeTheme: string;
   onThemeChange: (themeId: string) => void;
   onBackupData: () => void;
-  onRestoreData: (records: DispatchRecord[], mode: 'replace' | 'merge') => void;
+  onRestoreData: (records: DispatchRecord[], mode: 'replace' | 'merge', masters?: AllMasters) => void;
   onDeleteAllData: () => Promise<void>;
   onResetSampleData: () => void;
   onClearLocalCache: () => void;
@@ -53,6 +55,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     count: number;
     lrCount: number;
     totalFreight: number;
+    masters?: AllMasters;
+    mastersCount?: number;
   } | null>(null);
   const [restoreMode, setRestoreMode] = useState<'replace' | 'merge'>('replace');
   const [restoreError, setRestoreError] = useState<string | null>(null);
@@ -89,16 +93,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           ? parsed.dispatches
           : [];
 
-        if (dataList.length === 0) {
-          throw new Error('No valid dispatch records found in this backup file.');
+        const parsedMasters: AllMasters | undefined = parsed.masters || undefined;
+        let mastersCount = 0;
+        if (parsedMasters) {
+          mastersCount =
+            (parsedMasters.parties?.length || 0) +
+            (parsedMasters.vehicles?.length || 0) +
+            (parsedMasters.transporters?.length || 0) +
+            (parsedMasters.routes?.length || 0) +
+            (parsedMasters.drivers?.length || 0) +
+            (parsedMasters.commodities?.length || 0);
+        }
+
+        if (dataList.length === 0 && !parsedMasters) {
+          throw new Error('No valid dispatch records or master records found in this backup file.');
         }
 
         // Validate basic structure
         const validRecords = dataList.filter((r) => r.id && r.vehicleNumber && r.date);
-        if (validRecords.length === 0) {
-          throw new Error('Backup format does not match LogiTrack dispatch schema.');
-        }
-
         const lrCount = validRecords.reduce((s, r) => s + (r.lrs?.length || r.totalLrsCount || 0), 0);
         const totalFreight = validRecords.reduce((s, r) => s + (Number(r.totalFreightAmount) || 0), 0);
 
@@ -107,6 +119,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           count: validRecords.length,
           lrCount,
           totalFreight,
+          masters: parsedMasters,
+          mastersCount,
         });
       } catch (err: any) {
         setRestoreError(err?.message || 'Failed to read or parse the JSON file.');
@@ -120,10 +134,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleExecuteRestore = () => {
     if (!restorePreview) return;
     try {
-      onRestoreData(restorePreview.records, restoreMode);
+      onRestoreData(restorePreview.records, restoreMode, restorePreview.masters);
+      const masterMsg = restorePreview.mastersCount ? ` and ${restorePreview.mastersCount} Master items` : '';
       setRestoreSuccess(
-        `Successfully restored ${restorePreview.count} dispatch records (${restorePreview.lrCount} LRs) via ${
-          restoreMode === 'replace' ? 'database replacement' : 'database merge'
+        `Successfully restored ${restorePreview.count} dispatch records (${restorePreview.lrCount} LRs)${masterMsg} via ${
+          restoreMode === 'replace' ? 'database replacement (overwrite)' : 'database merge'
         }!`
       );
       setRestorePreview(null);
@@ -390,40 +405,57 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <CheckCircle2 className="h-4 w-4 text-emerald-700" />
                 <span>Backup Validated: Ready to Restore</span>
               </span>
-              <span className="font-mono text-emerald-800 font-black">
-                {restorePreview.count} Dispatches ({restorePreview.lrCount} LRs)
-              </span>
+              <div className="flex items-center space-x-2 font-mono text-xs">
+                <span className="text-emerald-800 font-black">
+                  {restorePreview.count} Dispatches ({restorePreview.lrCount} LRs)
+                </span>
+                {restorePreview.mastersCount && restorePreview.mastersCount > 0 ? (
+                  <span className="bg-purple-100 text-purple-950 font-bold px-2 py-0.5 rounded border border-purple-200">
+                    + {restorePreview.mastersCount} Masters
+                  </span>
+                ) : null}
+              </div>
             </div>
 
-            {/* Mode Selector: Replace vs Merge */}
+            {/* Mode Selector: Overwrite vs Merge */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
               <button
                 type="button"
                 onClick={() => setRestoreMode('replace')}
-                className={`p-3 rounded-xl border text-left transition-all ${
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                   restoreMode === 'replace'
-                    ? 'border-[#00E676] bg-emerald-50 text-slate-950 font-bold shadow-xs'
+                    ? 'border-rose-500 bg-rose-50 text-slate-950 font-bold shadow-xs ring-2 ring-rose-200'
                     : 'border-slate-200 bg-white text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <strong className="block text-xs font-black text-slate-950">Replace Current Data</strong>
-                <span className="text-[10px] text-slate-500">
-                  Completely replace current entries with the backup file.
+                <div className="flex items-center justify-between">
+                  <strong className="block text-xs font-black text-rose-950">⚡ Overwrite / Replace Database</strong>
+                  <span className="text-[9px] uppercase font-black px-1.5 py-0.5 rounded bg-rose-200 text-rose-900">
+                    Overwrite
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-600 block mt-1">
+                  Completely erases current records and replaces with backup data (Dispatches & Masters).
                 </span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setRestoreMode('merge')}
-                className={`p-3 rounded-xl border text-left transition-all ${
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                   restoreMode === 'merge'
-                    ? 'border-[#00E676] bg-emerald-50 text-slate-950 font-bold shadow-xs'
+                    ? 'border-[#00E676] bg-emerald-50 text-slate-950 font-bold shadow-xs ring-2 ring-emerald-200'
                     : 'border-slate-200 bg-white text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <strong className="block text-xs font-black text-slate-950">Merge with Existing Data</strong>
-                <span className="text-[10px] text-slate-500">
-                  Append new dispatches from the backup without deleting current ones.
+                <div className="flex items-center justify-between">
+                  <strong className="block text-xs font-black text-emerald-950">Merge with Existing Data</strong>
+                  <span className="text-[9px] uppercase font-black px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-950">
+                    Safe Merge
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-600 block mt-1">
+                  Appends new dispatches and updates existing matching parties/vehicles without deleting.
                 </span>
               </button>
             </div>
