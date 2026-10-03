@@ -92,7 +92,99 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
   const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const [routeModalDispatch, setRouteModalDispatch] = useState<DispatchRecord | null>(null);
 
-  // Distinct parties and transporters for filter dropdowns
+  // Slicer States (Multi-Dimension Interactive Slicers)
+  const [showSlicers, setShowSlicers] = useState<boolean>(false);
+  const [selectedFromParties, setSelectedFromParties] = useState<string[]>([]);
+  const [selectedToParties, setSelectedToParties] = useState<string[]>([]);
+  const [selectedTransporters, setSelectedTransporters] = useState<string[]>([]);
+  const [selectedConsignorCities, setSelectedConsignorCities] = useState<string[]>([]);
+  const [selectedConsigneeCities, setSelectedConsigneeCities] = useState<string[]>([]);
+  const [selectedVehicles, setSelectedVehicles] = useState<string[]>([]);
+
+  // Slicer Search filter inputs
+  const [searchSlicerFrom, setSearchSlicerFrom] = useState('');
+  const [searchSlicerTo, setSearchSlicerTo] = useState('');
+  const [searchSlicerTransporter, setSearchSlicerTransporter] = useState('');
+  const [searchSlicerConsignorCity, setSearchSlicerConsignorCity] = useState('');
+  const [searchSlicerConsigneeCity, setSearchSlicerConsigneeCity] = useState('');
+  const [searchSlicerVehicle, setSearchSlicerVehicle] = useState('');
+
+  // Slicer Dimension Counts & Lists
+  const fromPartySlicerItems = useMemo(() => {
+    const map = new Map<string, number>();
+    records.forEach((r) => {
+      if (r.fromParty) {
+        map.set(r.fromParty, (map.get(r.fromParty) || 0) + 1);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [records]);
+
+  const toPartySlicerItems = useMemo(() => {
+    const map = new Map<string, number>();
+    records.forEach((r) => {
+      if (r.toParty) {
+        map.set(r.toParty, (map.get(r.toParty) || 0) + 1);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [records]);
+
+  const transporterSlicerItems = useMemo(() => {
+    const map = new Map<string, number>();
+    records.forEach((r) => {
+      if (r.transporterName) {
+        map.set(r.transporterName, (map.get(r.transporterName) || 0) + 1);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [records]);
+
+  const consignorCitySlicerItems = useMemo(() => {
+    const map = new Map<string, number>();
+    records.forEach((r) => {
+      const cities = new Set((r.lrs || []).map((l) => l.consignorCity).filter(Boolean));
+      cities.forEach((c) => {
+        map.set(c, (map.get(c) || 0) + 1);
+      });
+    });
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [records]);
+
+  const consigneeCitySlicerItems = useMemo(() => {
+    const map = new Map<string, number>();
+    records.forEach((r) => {
+      const cities = new Set((r.lrs || []).map((l) => l.consigneeCity).filter(Boolean));
+      cities.forEach((c) => {
+        map.set(c, (map.get(c) || 0) + 1);
+      });
+    });
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [records]);
+
+  const vehicleSlicerItems = useMemo(() => {
+    const map = new Map<string, number>();
+    records.forEach((r) => {
+      if (r.vehicleNumber) {
+        map.set(r.vehicleNumber, (map.get(r.vehicleNumber) || 0) + 1);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [records]);
+
+  // Distinct parties and transporters for legacy dropdowns
   const distinctFromParties = useMemo(() => {
     return Array.from(new Set(records.map((r) => r.fromParty).filter(Boolean))).sort();
   }, [records]);
@@ -104,6 +196,35 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
   const distinctTransporters = useMemo(() => {
     return Array.from(new Set(records.map((r) => r.transporterName).filter(Boolean))).sort();
   }, [records]);
+
+  // Total active slicer selections count
+  const activeSlicersCount = 
+    selectedFromParties.length + 
+    selectedToParties.length + 
+    selectedTransporters.length + 
+    selectedConsignorCities.length + 
+    selectedConsigneeCities.length + 
+    selectedVehicles.length;
+
+  // Toggle helper for slicers
+  const toggleSlicer = (
+    currentList: string[],
+    setList: React.Dispatch<React.SetStateAction<string[]>>,
+    val: string
+  ) => {
+    setList((prev) =>
+      prev.includes(val) ? prev.filter((item) => item !== val) : [...prev, val]
+    );
+  };
+
+  const clearAllSlicers = () => {
+    setSelectedFromParties([]);
+    setSelectedToParties([]);
+    setSelectedTransporters([]);
+    setSelectedConsignorCities([]);
+    setSelectedConsigneeCities([]);
+    setSelectedVehicles([]);
+  };
 
   // Quick Date Range Presets
   const handleDatePreset = (preset: 'today' | '7days' | 'month' | 'clear') => {
@@ -145,7 +266,8 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
     filterToParty ||
     filterTransporter ||
     placementFilter !== 'All' ||
-    statusFilter !== 'All'
+    statusFilter !== 'All' ||
+    activeSlicersCount > 0
   );
 
   // Clear all filters
@@ -160,11 +282,44 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
     setFilterTransporter('');
     setPlacementFilter('All');
     setStatusFilter('All');
+    clearAllSlicers();
   };
 
   // Filtering Logic
   const filteredRecords = useMemo(() => {
     return records.filter((rec) => {
+      // Slicer 1: From Party
+      if (selectedFromParties.length > 0 && !selectedFromParties.includes(rec.fromParty)) {
+        return false;
+      }
+
+      // Slicer 2: To Party
+      if (selectedToParties.length > 0 && !selectedToParties.includes(rec.toParty)) {
+        return false;
+      }
+
+      // Slicer 3: Transporter
+      if (selectedTransporters.length > 0 && !selectedTransporters.includes(rec.transporterName)) {
+        return false;
+      }
+
+      // Slicer 4: Consignor City
+      if (selectedConsignorCities.length > 0) {
+        const hasMatch = (rec.lrs || []).some((l) => selectedConsignorCities.includes(l.consignorCity));
+        if (!hasMatch) return false;
+      }
+
+      // Slicer 5: Consignee City
+      if (selectedConsigneeCities.length > 0) {
+        const hasMatch = (rec.lrs || []).some((l) => selectedConsigneeCities.includes(l.consigneeCity));
+        if (!hasMatch) return false;
+      }
+
+      // Slicer 6: Vehicle Number
+      if (selectedVehicles.length > 0 && !selectedVehicles.includes(rec.vehicleNumber)) {
+        return false;
+      }
+
       // 1. Placement Filter
       if (placementFilter !== 'All' && rec.placement !== placementFilter) {
         return false;
@@ -474,6 +629,24 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
               ))}
             </div>
 
+            {/* Toggle Multi-Dimension Slicers Button */}
+            <button
+              onClick={() => setShowSlicers(!showSlicers)}
+              className={`px-3 py-2 rounded-xl text-xs font-black flex items-center space-x-1.5 border transition-all ${
+                showSlicers || activeSlicersCount > 0
+                  ? 'bg-indigo-700 text-white border-indigo-800 shadow-xs'
+                  : 'bg-indigo-50 border-indigo-200 text-indigo-950 hover:bg-indigo-100'
+              }`}
+            >
+              <Layers className="h-3.5 w-3.5" />
+              <span>Slicers</span>
+              {activeSlicersCount > 0 && (
+                <span className="px-1.5 py-0.2 text-[10px] font-black rounded-full bg-[#00E676] text-slate-950">
+                  {activeSlicersCount}
+                </span>
+              )}
+            </button>
+
             {/* Toggle Filter Drawer Button */}
             <button
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
@@ -549,6 +722,343 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
             </button>
           </div>
         </div>
+
+        {/* MULTI-DIMENSION INTERACTIVE SLICERS PANEL */}
+        {showSlicers && (
+          <div className="pt-3 border-t border-slate-200 space-y-3 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Layers className="h-4 w-4 text-indigo-700" />
+                <span className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                  Interactive Multi-Dimension Slicers:
+                </span>
+                {activeSlicersCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-900 border border-indigo-300">
+                    {activeSlicersCount} active selection(s)
+                  </span>
+                )}
+              </div>
+              {activeSlicersCount > 0 && (
+                <button
+                  type="button"
+                  onClick={clearAllSlicers}
+                  className="text-rose-600 hover:text-rose-800 text-[11px] font-bold flex items-center space-x-1"
+                >
+                  <X className="h-3 w-3" />
+                  <span>Reset All Slicers</span>
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
+              {/* SLICER 1: FROM PARTY */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex flex-col h-56">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                  <span className="font-bold text-slate-800 text-[11px] flex items-center space-x-1">
+                    <Building2 className="h-3 w-3 text-amber-600" />
+                    <span>From Party</span>
+                  </span>
+                  {selectedFromParties.length > 0 && (
+                    <button
+                      onClick={() => setSelectedFromParties([])}
+                      className="text-[10px] text-slate-500 hover:text-rose-600 font-bold"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  placeholder="Filter party..."
+                  value={searchSlicerFrom}
+                  onChange={(e) => setSearchSlicerFrom(e.target.value)}
+                  className="w-full mt-1.5 px-2 py-1 text-[11px] bg-white border border-slate-300 rounded-md focus:ring-1 focus:ring-amber-500"
+                />
+                <div className="mt-1.5 flex-1 overflow-y-auto space-y-0.5 pr-0.5">
+                  {fromPartySlicerItems
+                    .filter((item) => !searchSlicerFrom || item.name.toLowerCase().includes(searchSlicerFrom.toLowerCase()))
+                    .map((item) => {
+                      const isSelected = selectedFromParties.includes(item.name);
+                      return (
+                        <button
+                          key={item.name}
+                          type="button"
+                          onClick={() => toggleSlicer(selectedFromParties, setSelectedFromParties, item.name)}
+                          className={`w-full text-left px-2 py-1 rounded-md text-[11px] flex items-center justify-between transition-colors ${
+                            isSelected
+                              ? 'bg-amber-600 text-white font-bold shadow-2xs'
+                              : 'hover:bg-slate-200/70 text-slate-700'
+                          }`}
+                        >
+                          <span className="truncate mr-1">{item.name}</span>
+                          <span className={`text-[10px] px-1 rounded font-mono ${
+                            isSelected ? 'bg-amber-800 text-white' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            {item.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* SLICER 2: TO PARTY */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex flex-col h-56">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                  <span className="font-bold text-slate-800 text-[11px] flex items-center space-x-1">
+                    <Building2 className="h-3 w-3 text-emerald-600" />
+                    <span>To Party</span>
+                  </span>
+                  {selectedToParties.length > 0 && (
+                    <button
+                      onClick={() => setSelectedToParties([])}
+                      className="text-[10px] text-slate-500 hover:text-rose-600 font-bold"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  placeholder="Filter party..."
+                  value={searchSlicerTo}
+                  onChange={(e) => setSearchSlicerTo(e.target.value)}
+                  className="w-full mt-1.5 px-2 py-1 text-[11px] bg-white border border-slate-300 rounded-md focus:ring-1 focus:ring-emerald-500"
+                />
+                <div className="mt-1.5 flex-1 overflow-y-auto space-y-0.5 pr-0.5">
+                  {toPartySlicerItems
+                    .filter((item) => !searchSlicerTo || item.name.toLowerCase().includes(searchSlicerTo.toLowerCase()))
+                    .map((item) => {
+                      const isSelected = selectedToParties.includes(item.name);
+                      return (
+                        <button
+                          key={item.name}
+                          type="button"
+                          onClick={() => toggleSlicer(selectedToParties, setSelectedToParties, item.name)}
+                          className={`w-full text-left px-2 py-1 rounded-md text-[11px] flex items-center justify-between transition-colors ${
+                            isSelected
+                              ? 'bg-emerald-600 text-white font-bold shadow-2xs'
+                              : 'hover:bg-slate-200/70 text-slate-700'
+                          }`}
+                        >
+                          <span className="truncate mr-1">{item.name}</span>
+                          <span className={`text-[10px] px-1 rounded font-mono ${
+                            isSelected ? 'bg-emerald-800 text-white' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            {item.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* SLICER 3: TRANSPORTER */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex flex-col h-56">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                  <span className="font-bold text-slate-800 text-[11px] flex items-center space-x-1">
+                    <Truck className="h-3 w-3 text-purple-600" />
+                    <span>Transporter</span>
+                  </span>
+                  {selectedTransporters.length > 0 && (
+                    <button
+                      onClick={() => setSelectedTransporters([])}
+                      className="text-[10px] text-slate-500 hover:text-rose-600 font-bold"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  placeholder="Filter transporter..."
+                  value={searchSlicerTransporter}
+                  onChange={(e) => setSearchSlicerTransporter(e.target.value)}
+                  className="w-full mt-1.5 px-2 py-1 text-[11px] bg-white border border-slate-300 rounded-md focus:ring-1 focus:ring-purple-500"
+                />
+                <div className="mt-1.5 flex-1 overflow-y-auto space-y-0.5 pr-0.5">
+                  {transporterSlicerItems
+                    .filter((item) => !searchSlicerTransporter || item.name.toLowerCase().includes(searchSlicerTransporter.toLowerCase()))
+                    .map((item) => {
+                      const isSelected = selectedTransporters.includes(item.name);
+                      return (
+                        <button
+                          key={item.name}
+                          type="button"
+                          onClick={() => toggleSlicer(selectedTransporters, setSelectedTransporters, item.name)}
+                          className={`w-full text-left px-2 py-1 rounded-md text-[11px] flex items-center justify-between transition-colors ${
+                            isSelected
+                              ? 'bg-purple-700 text-white font-bold shadow-2xs'
+                              : 'hover:bg-slate-200/70 text-slate-700'
+                          }`}
+                        >
+                          <span className="truncate mr-1">{item.name}</span>
+                          <span className={`text-[10px] px-1 rounded font-mono ${
+                            isSelected ? 'bg-purple-900 text-white' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            {item.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* SLICER 4: CONSIGNOR CITY */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex flex-col h-56">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                  <span className="font-bold text-slate-800 text-[11px] flex items-center space-x-1">
+                    <MapPin className="h-3 w-3 text-sky-600" />
+                    <span>Consignor City</span>
+                  </span>
+                  {selectedConsignorCities.length > 0 && (
+                    <button
+                      onClick={() => setSelectedConsignorCities([])}
+                      className="text-[10px] text-slate-500 hover:text-rose-600 font-bold"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  placeholder="Filter city..."
+                  value={searchSlicerConsignorCity}
+                  onChange={(e) => setSearchSlicerConsignorCity(e.target.value)}
+                  className="w-full mt-1.5 px-2 py-1 text-[11px] bg-white border border-slate-300 rounded-md focus:ring-1 focus:ring-sky-500"
+                />
+                <div className="mt-1.5 flex-1 overflow-y-auto space-y-0.5 pr-0.5">
+                  {consignorCitySlicerItems
+                    .filter((item) => !searchSlicerConsignorCity || item.name.toLowerCase().includes(searchSlicerConsignorCity.toLowerCase()))
+                    .map((item) => {
+                      const isSelected = selectedConsignorCities.includes(item.name);
+                      return (
+                        <button
+                          key={item.name}
+                          type="button"
+                          onClick={() => toggleSlicer(selectedConsignorCities, setSelectedConsignorCities, item.name)}
+                          className={`w-full text-left px-2 py-1 rounded-md text-[11px] flex items-center justify-between transition-colors ${
+                            isSelected
+                              ? 'bg-sky-700 text-white font-bold shadow-2xs'
+                              : 'hover:bg-slate-200/70 text-slate-700'
+                          }`}
+                        >
+                          <span className="truncate mr-1">{item.name}</span>
+                          <span className={`text-[10px] px-1 rounded font-mono ${
+                            isSelected ? 'bg-sky-900 text-white' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            {item.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* SLICER 5: CONSIGNEE CITY */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex flex-col h-56">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                  <span className="font-bold text-slate-800 text-[11px] flex items-center space-x-1">
+                    <MapPin className="h-3 w-3 text-teal-600" />
+                    <span>Consignee City</span>
+                  </span>
+                  {selectedConsigneeCities.length > 0 && (
+                    <button
+                      onClick={() => setSelectedConsigneeCities([])}
+                      className="text-[10px] text-slate-500 hover:text-rose-600 font-bold"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  placeholder="Filter city..."
+                  value={searchSlicerConsigneeCity}
+                  onChange={(e) => setSearchSlicerConsigneeCity(e.target.value)}
+                  className="w-full mt-1.5 px-2 py-1 text-[11px] bg-white border border-slate-300 rounded-md focus:ring-1 focus:ring-teal-500"
+                />
+                <div className="mt-1.5 flex-1 overflow-y-auto space-y-0.5 pr-0.5">
+                  {consigneeCitySlicerItems
+                    .filter((item) => !searchSlicerConsigneeCity || item.name.toLowerCase().includes(searchSlicerConsigneeCity.toLowerCase()))
+                    .map((item) => {
+                      const isSelected = selectedConsigneeCities.includes(item.name);
+                      return (
+                        <button
+                          key={item.name}
+                          type="button"
+                          onClick={() => toggleSlicer(selectedConsigneeCities, setSelectedConsigneeCities, item.name)}
+                          className={`w-full text-left px-2 py-1 rounded-md text-[11px] flex items-center justify-between transition-colors ${
+                            isSelected
+                              ? 'bg-teal-700 text-white font-bold shadow-2xs'
+                              : 'hover:bg-slate-200/70 text-slate-700'
+                          }`}
+                        >
+                          <span className="truncate mr-1">{item.name}</span>
+                          <span className={`text-[10px] px-1 rounded font-mono ${
+                            isSelected ? 'bg-teal-900 text-white' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            {item.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* SLICER 6: VEHICLE NUMBER */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex flex-col h-56">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                  <span className="font-bold text-slate-800 text-[11px] flex items-center space-x-1">
+                    <Truck className="h-3 w-3 text-slate-700" />
+                    <span>Vehicle No.</span>
+                  </span>
+                  {selectedVehicles.length > 0 && (
+                    <button
+                      onClick={() => setSelectedVehicles([])}
+                      className="text-[10px] text-slate-500 hover:text-rose-600 font-bold"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  placeholder="Filter vehicle..."
+                  value={searchSlicerVehicle}
+                  onChange={(e) => setSearchSlicerVehicle(e.target.value)}
+                  className="w-full mt-1.5 px-2 py-1 text-[11px] bg-white border border-slate-300 rounded-md uppercase font-mono focus:ring-1 focus:ring-slate-500"
+                />
+                <div className="mt-1.5 flex-1 overflow-y-auto space-y-0.5 pr-0.5">
+                  {vehicleSlicerItems
+                    .filter((item) => !searchSlicerVehicle || item.name.toLowerCase().includes(searchSlicerVehicle.toLowerCase()))
+                    .map((item) => {
+                      const isSelected = selectedVehicles.includes(item.name);
+                      return (
+                        <button
+                          key={item.name}
+                          type="button"
+                          onClick={() => toggleSlicer(selectedVehicles, setSelectedVehicles, item.name)}
+                          className={`w-full text-left px-2 py-1 rounded-md text-[11px] font-mono flex items-center justify-between transition-colors ${
+                            isSelected
+                              ? 'bg-slate-900 text-white font-bold shadow-2xs'
+                              : 'hover:bg-slate-200/70 text-slate-800'
+                          }`}
+                        >
+                          <span className="truncate mr-1">{item.name}</span>
+                          <span className={`text-[10px] px-1 rounded ${
+                            isSelected ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            {item.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 2. ADVANCED FILTERS DRAWER (Date, LR Number, From Party, To Party) */}
         {showAdvancedFilters && (
@@ -779,6 +1289,52 @@ export const DispatchesList: React.FC<DispatchesListProps> = ({
                 <button onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}><X className="h-3 w-3 text-sky-700 hover:text-sky-950" /></button>
               </span>
             )}
+
+            {/* Slicers Active Chips */}
+            {selectedFromParties.map((p) => (
+              <span key={`slicer-from-${p}`} className="inline-flex items-center space-x-1 bg-amber-100 text-amber-950 border border-amber-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                <span>From: {p}</span>
+                <button onClick={() => toggleSlicer(selectedFromParties, setSelectedFromParties, p)}><X className="h-3 w-3 text-amber-800 hover:text-amber-950" /></button>
+              </span>
+            ))}
+
+            {selectedToParties.map((p) => (
+              <span key={`slicer-to-${p}`} className="inline-flex items-center space-x-1 bg-emerald-100 text-emerald-950 border border-emerald-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                <span>To: {p}</span>
+                <button onClick={() => toggleSlicer(selectedToParties, setSelectedToParties, p)}><X className="h-3 w-3 text-emerald-800 hover:text-emerald-950" /></button>
+              </span>
+            ))}
+
+            {selectedTransporters.map((t) => (
+              <span key={`slicer-trn-${t}`} className="inline-flex items-center space-x-1 bg-purple-100 text-purple-950 border border-purple-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                <span>Transporter: {t}</span>
+                <button onClick={() => toggleSlicer(selectedTransporters, setSelectedTransporters, t)}><X className="h-3 w-3 text-purple-800 hover:text-purple-950" /></button>
+              </span>
+            ))}
+
+            {selectedConsignorCities.map((c) => (
+              <span key={`slicer-c-city-${c}`} className="inline-flex items-center space-x-1 bg-sky-100 text-sky-950 border border-sky-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                <MapPin className="h-3 w-3 text-sky-700" />
+                <span>Origin: {c}</span>
+                <button onClick={() => toggleSlicer(selectedConsignorCities, setSelectedConsignorCities, c)}><X className="h-3 w-3 text-sky-800 hover:text-sky-950" /></button>
+              </span>
+            ))}
+
+            {selectedConsigneeCities.map((c) => (
+              <span key={`slicer-d-city-${c}`} className="inline-flex items-center space-x-1 bg-teal-100 text-teal-950 border border-teal-300 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                <MapPin className="h-3 w-3 text-teal-700" />
+                <span>Dest: {c}</span>
+                <button onClick={() => toggleSlicer(selectedConsigneeCities, setSelectedConsigneeCities, c)}><X className="h-3 w-3 text-teal-800 hover:text-teal-950" /></button>
+              </span>
+            ))}
+
+            {selectedVehicles.map((v) => (
+              <span key={`slicer-veh-${v}`} className="inline-flex items-center space-x-1 bg-slate-200 text-slate-950 border border-slate-400 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold">
+                <Truck className="h-3 w-3 text-slate-700" />
+                <span>Veh: {v}</span>
+                <button onClick={() => toggleSlicer(selectedVehicles, setSelectedVehicles, v)}><X className="h-3 w-3 text-slate-800 hover:text-black" /></button>
+              </span>
+            ))}
 
             {placementFilter !== 'All' && (
               <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
