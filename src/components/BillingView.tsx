@@ -11,7 +11,9 @@ import {
   saveInvoice, 
   deleteInvoice, 
   getBillerProfile, 
-  saveBillerProfile 
+  saveBillerProfile,
+  exportInvoicesBackupJSON,
+  restoreInvoicesFromBackupJSON
 } from '../lib/invoiceService';
 import { getBillingParties, getMasters } from '../lib/mastersService';
 import { 
@@ -92,6 +94,17 @@ export const BillingView: React.FC<BillingViewProps> = ({
   // Global Invoice Customizer Modal
   const [isCustomizerModalOpen, setIsCustomizerModalOpen] = useState(false);
   const [globalCustomization, setGlobalCustomization] = useState(() => getStoredInvoiceCustomization());
+
+  // Invoices Backup & Restore Modal State
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [restorePreview, setRestorePreview] = useState<{
+    invoices: FreightInvoice[];
+    totalInvoices: number;
+    totalTurnover: number;
+    billerName?: string;
+  } | null>(null);
+  const [restoreMode, setRestoreMode] = useState<'overwrite' | 'merge'>('overwrite');
+  const [restoreError, setRestoreError] = useState<string | null>(null);
 
   // Reload invoices from storage
   const refreshInvoices = () => {
@@ -466,6 +479,96 @@ export const BillingView: React.FC<BillingViewProps> = ({
     showNotification(`Exported ${selectedInvoices.length} selected invoices to CSV.`, 'success');
   };
 
+  // Full Invoices JSON Backup Export
+  const handleExportInvoicesJSON = () => {
+    const payload = exportInvoicesBackupJSON();
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `LogiTrack_Invoices_Backup_${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    document.body.removeChild(downloadAnchor);
+    showNotification(`Invoices dataset exported to JSON backup (${invoices.length} invoices).`, 'success');
+  };
+
+  // Selected Invoices JSON Backup Export
+  const handleBatchExportSelectedJSON = () => {
+    if (selectedInvoices.length === 0) return;
+    const payload = {
+      app: 'LogiTrack Freight Invoicing Suite',
+      version: '3.0',
+      exportedAt: new Date().toISOString(),
+      totalInvoices: selectedInvoices.length,
+      totalTurnover: selectedInvoices.reduce((s, inv) => s + (inv.grandTotal || 0), 0),
+      billerProfile: getBillerProfile(),
+      invoices: selectedInvoices,
+    };
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `LogiTrack_Invoices_Selected_${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    document.body.removeChild(downloadAnchor);
+    showNotification(`Exported ${selectedInvoices.length} selected invoices to JSON backup.`, 'success');
+  };
+
+  // Select File for Invoices Restore
+  const handleFileSelectForRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setRestoreError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        const candidateInvoices: FreightInvoice[] = Array.isArray(parsed?.invoices)
+          ? parsed.invoices
+          : Array.isArray(parsed)
+          ? parsed
+          : [];
+
+        if (candidateInvoices.length === 0) {
+          throw new Error('Selected backup file contains 0 valid invoice records.');
+        }
+
+        const totalTurnover = candidateInvoices.reduce((s, inv) => s + (Number(inv.grandTotal) || 0), 0);
+
+        setRestorePreview({
+          invoices: candidateInvoices,
+          totalInvoices: candidateInvoices.length,
+          totalTurnover,
+          billerName: parsed?.billerProfile?.companyName,
+        });
+        setIsRestoreModalOpen(true);
+      } catch (err: any) {
+        setRestoreError(err.message || 'Invalid JSON format or corrupted file.');
+        showNotification(err.message || 'Failed to parse invoice backup file.', 'error');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  // Execute Restore (Overwrite vs Merge)
+  const handleExecuteRestore = () => {
+    if (!restorePreview || restorePreview.invoices.length === 0) return;
+    try {
+      const result = restoreInvoicesFromBackupJSON(restorePreview, restoreMode);
+      refreshInvoices();
+      setIsRestoreModalOpen(false);
+      setRestorePreview(null);
+      showNotification(
+        `Successfully restored ${result.count} invoices (${restoreMode === 'overwrite' ? 'Clean Overwrite' : 'Merge & Update'}).`,
+        'success'
+      );
+    } catch (err: any) {
+      setRestoreError(err.message || 'Failed to restore invoices.');
+    }
+  };
+
   return (
     <div className="space-y-6 pb-20 animate-in fade-in duration-150">
       {/* Top Header & Quick Actions */}
@@ -511,12 +614,40 @@ export const BillingView: React.FC<BillingViewProps> = ({
             <span>Issuer / Company Info</span>
           </button>
 
+          {/* Export JSON Backup */}
+          <button
+            type="button"
+            onClick={handleExportInvoicesJSON}
+            disabled={invoices.length === 0}
+            className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors disabled:opacity-40 cursor-pointer"
+            title="Export all Invoices to JSON Backup file"
+          >
+            <Download className="h-4 w-4 text-indigo-700" />
+            <span>Export Backup</span>
+          </button>
+
+          {/* Restore Invoices (Overwrite / Merge) */}
+          <label 
+            className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
+            title="Restore invoices from JSON backup file with Overwrite or Safe Merge option"
+          >
+            <Upload className="h-4 w-4 text-emerald-700" />
+            <span>Restore Invoices</span>
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleFileSelectForRestore}
+              className="hidden"
+            />
+          </label>
+
           {/* Export to CSV */}
           <button
             type="button"
             onClick={handleExportInvoicesCsv}
             disabled={invoices.length === 0}
             className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors disabled:opacity-40 cursor-pointer"
+            title="Export invoices to Excel / CSV format"
           >
             <Download className="h-4 w-4 text-emerald-700" />
             <span>Export CSV</span>
@@ -803,6 +934,17 @@ export const BillingView: React.FC<BillingViewProps> = ({
               >
                 <Clock className="h-3.5 w-3.5 text-amber-400" />
                 <span>Mark Unpaid</span>
+              </button>
+
+              {/* Batch Export Selected to JSON */}
+              <button
+                type="button"
+                onClick={handleBatchExportSelectedJSON}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 border border-slate-700 transition-colors"
+                title="Export selected invoices to JSON Backup"
+              >
+                <Download className="h-3.5 w-3.5 text-indigo-400" />
+                <span>Export JSON ({selectedStats.count})</span>
               </button>
 
               {/* Batch Export Selected to CSV */}
@@ -1573,6 +1715,163 @@ export const BillingView: React.FC<BillingViewProps> = ({
               >
                 Save as Default
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* INVOICES RESTORE MODAL (Overwrite vs Merge) */}
+      {isRestoreModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-300 w-full max-w-xl rounded-2xl shadow-2xl p-6 space-y-4 max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center space-x-2">
+                <span className="p-2 rounded-xl bg-emerald-500/20 text-[#00E676] border border-emerald-500/30">
+                  <Upload className="h-5 w-5 text-emerald-800" />
+                </span>
+                <div>
+                  <h4 className="font-black text-slate-950 text-base">
+                    Restore Invoices from JSON Backup
+                  </h4>
+                  <p className="text-xs text-slate-500">Restore or merge previous freight bills and ledger records.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsRestoreModalOpen(false);
+                  setRestorePreview(null);
+                }}
+                className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs overflow-y-auto pr-1">
+              {restorePreview && (
+                <>
+                  {/* Backup Stats Summary Card */}
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+                    <span className="font-bold text-emerald-950 text-xs block">
+                      Backup File Content Verified
+                    </span>
+                    <div className="grid grid-cols-2 gap-2 text-slate-700">
+                      <div>
+                        <span className="text-slate-500">Total Invoices: </span>
+                        <strong className="font-mono text-slate-950 text-sm">{restorePreview.totalInvoices}</strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Total Turnover: </span>
+                        <strong className="font-mono text-emerald-900 text-sm">{formatCurrency(restorePreview.totalTurnover)}</strong>
+                      </div>
+                      {restorePreview.billerName && (
+                        <div className="col-span-2 text-[11px] text-slate-600">
+                          Issuer Entity: <strong className="text-slate-900">{restorePreview.billerName}</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Restore Strategy Mode Selector */}
+                  <div className="space-y-2.5">
+                    <label className="block font-black text-slate-900 text-xs">
+                      Choose Restore Strategy:
+                    </label>
+
+                    {/* OVERWRITE MODE */}
+                    <div
+                      onClick={() => setRestoreMode('overwrite')}
+                      className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                        restoreMode === 'overwrite'
+                          ? 'border-rose-500 bg-rose-50/80 ring-2 ring-rose-200'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            name="inv_restore_mode"
+                            checked={restoreMode === 'overwrite'}
+                            onChange={() => setRestoreMode('overwrite')}
+                            className="text-rose-600 focus:ring-rose-500 h-4 w-4"
+                          />
+                          <strong className="text-slate-950 font-black text-xs">
+                            Clean Overwrite (Replace All Current Invoices)
+                          </strong>
+                        </div>
+                        <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded bg-rose-200 text-rose-950">
+                          Replaces Database
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 font-medium pl-6 mt-1">
+                        Wipes existing invoices in the ledger and replaces them completely with the backup records.
+                      </p>
+                    </div>
+
+                    {/* MERGE MODE */}
+                    <div
+                      onClick={() => setRestoreMode('merge')}
+                      className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                        restoreMode === 'merge'
+                          ? 'border-[#00E676] bg-emerald-50/80 ring-2 ring-emerald-200'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            name="inv_restore_mode"
+                            checked={restoreMode === 'merge'}
+                            onChange={() => setRestoreMode('merge')}
+                            className="text-emerald-600 focus:ring-[#00E676] h-4 w-4"
+                          />
+                          <strong className="text-slate-950 font-black text-xs">
+                            Safe Merge & Update Existing Invoices
+                          </strong>
+                        </div>
+                        <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded bg-emerald-200 text-emerald-950">
+                          Recommended
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 font-medium pl-6 mt-1">
+                        Preserves current ledger, updates existing bills with matching invoice numbers, and appends new bills.
+                      </p>
+                    </div>
+                  </div>
+
+                  {restoreError && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold rounded-xl flex items-center space-x-2">
+                      <AlertCircle className="h-4 w-4 text-rose-600 flex-shrink-0" />
+                      <span>{restoreError}</span>
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex items-center justify-end space-x-3 border-t">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRestoreModalOpen(false);
+                        setRestorePreview(null);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExecuteRestore}
+                      className={`px-5 py-2 rounded-xl font-black text-xs sm:text-sm shadow-xs border transition-all cursor-pointer ${
+                        restoreMode === 'overwrite'
+                          ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-700'
+                          : 'bg-[#00E676] hover:bg-[#00c864] text-slate-950 border-emerald-400'
+                      }`}
+                    >
+                      {restoreMode === 'overwrite' ? 'Proceed with Overwrite' : 'Proceed with Merge'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

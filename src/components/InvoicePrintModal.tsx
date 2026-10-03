@@ -19,6 +19,10 @@ import {
 import { UpiPaymentQr } from './UpiPaymentQr';
 import { InvoiceCustomizerPanel } from './InvoiceCustomizerPanel';
 import { 
+  downloadInvoicePdfFromElement, 
+  getInvoicePdfFileName 
+} from '../lib/invoicePdfGenerator';
+import { 
   Printer, 
   X, 
   Building2, 
@@ -32,7 +36,8 @@ import {
   Sliders,
   Sparkles,
   Download,
-  Share2
+  Share2,
+  Loader2
 } from 'lucide-react';
 
 interface InvoicePrintModalProps {
@@ -48,6 +53,8 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
 }) => {
   const [selectedCopy, setSelectedCopy] = useState<string>('Original for Recipient');
   const [showCustomizer, setShowCustomizer] = useState<boolean>(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
+  const [pdfStatus, setPdfStatus] = useState<string>('');
 
   // Initialize customization from invoice or stored defaults
   const [customization, setCustomization] = useState<InvoiceCustomization>(() => {
@@ -64,6 +71,23 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPdf = async () => {
+    const el = document.getElementById('printable-invoice-container');
+    if (!el || !invoice) return;
+    setIsDownloadingPdf(true);
+    setPdfStatus('Generating PDF...');
+    try {
+      const fileName = getInvoicePdfFileName(invoice);
+      await downloadInvoicePdfFromElement(el, fileName, (msg) => setPdfStatus(msg));
+    } catch (err) {
+      console.error(err);
+      window.print();
+    } finally {
+      setIsDownloadingPdf(false);
+      setPdfStatus('');
+    }
   };
 
   const handleCustomizationChange = (updated: InvoiceCustomization) => {
@@ -179,6 +203,27 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
               <span>{showCustomizer ? 'Close Styler' : 'Customize Look'}</span>
             </button>
 
+            {/* Direct PDF Download Button */}
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={isDownloadingPdf}
+              className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-black flex items-center space-x-1.5 shadow-xs border border-emerald-600 transition-all cursor-pointer disabled:opacity-60"
+              title="Download direct high-resolution vector/raster PDF file"
+            >
+              {isDownloadingPdf ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>{pdfStatus || 'Saving PDF...'}</span>
+                </>
+              ) : (
+                <>
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download PDF</span>
+                </>
+              )}
+            </button>
+
             {/* Print Button */}
             <button
               type="button"
@@ -186,14 +231,14 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
               className="px-3.5 py-1.5 bg-[#00E676] hover:bg-[#00c864] text-slate-950 rounded-xl text-xs font-black flex items-center space-x-1.5 shadow-xs border border-emerald-400 transition-all cursor-pointer"
             >
               <Printer className="h-3.5 w-3.5" />
-              <span>Print / PDF</span>
+              <span>Print</span>
             </button>
 
             {/* Close Button */}
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
             >
               <X className="h-5 w-5" />
             </button>
@@ -213,6 +258,7 @@ export const InvoicePrintModal: React.FC<InvoicePrintModalProps> = ({
 
         {/* ================= PRINTABLE DOCUMENT CANVAS ================= */}
         <div 
+          id="printable-invoice-container"
           className={`p-6 sm:p-8 bg-white text-slate-900 overflow-y-auto print:p-0 print:m-0 print:overflow-visible relative ${fontClass} ${sizeClass}`}
           style={{
             // CSS variable overrides for custom theme colors

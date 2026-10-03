@@ -872,3 +872,102 @@ export function getSampleInvoices(): FreightInvoice[] {
 
   return [inv1, inv2];
 }
+
+export interface InvoicesBackupPayload {
+  app: string;
+  version: string;
+  exportedAt: string;
+  totalInvoices: number;
+  totalTurnover: number;
+  billerProfile?: BillerCompanyInfo;
+  invoices: FreightInvoice[];
+}
+
+/**
+ * Exports current invoices and biller profile as a structured backup object
+ */
+export function exportInvoicesBackupJSON(): InvoicesBackupPayload {
+  const invoices = getInvoices();
+  const billerProfile = getBillerProfile();
+  const totalTurnover = invoices.reduce((sum, inv) => sum + (inv.grandTotal || 0), 0);
+
+  return {
+    app: 'LogiTrack Freight Invoicing Suite',
+    version: '3.0',
+    exportedAt: new Date().toISOString(),
+    totalInvoices: invoices.length,
+    totalTurnover,
+    billerProfile,
+    invoices,
+  };
+}
+
+/**
+ * Restores invoices from a backup payload with 'overwrite' or 'merge' strategy
+ */
+export function restoreInvoicesFromBackupJSON(
+  payload: any,
+  mode: 'overwrite' | 'merge' = 'merge'
+): { success: boolean; count: number; updatedInvoices: FreightInvoice[] } {
+  const candidateInvoices: FreightInvoice[] = Array.isArray(payload?.invoices)
+    ? payload.invoices
+    : Array.isArray(payload)
+    ? payload
+    : [];
+
+  if (!candidateInvoices || candidateInvoices.length === 0) {
+    throw new Error('Backup file contains 0 valid invoice records.');
+  }
+
+  // Sanitize and validate records
+  const validInvoices: FreightInvoice[] = candidateInvoices.filter(
+    (inv) => inv && typeof inv.invoiceNumber === 'string' && inv.invoiceNumber.trim() !== ''
+  );
+
+  if (validInvoices.length === 0) {
+    throw new Error('No valid invoice records found with valid Invoice Numbers.');
+  }
+
+  // Optional: Restore biller profile if present in payload
+  if (payload.billerProfile && payload.billerProfile.companyName) {
+    saveBillerProfile(payload.billerProfile);
+  }
+
+  let finalInvoices: FreightInvoice[] = [];
+
+  if (mode === 'overwrite') {
+    finalInvoices = validInvoices;
+  } else {
+    // Merge by invoiceNumber and ID
+    const currentInvoices = getInvoices();
+    const map = new Map<string, FreightInvoice>();
+
+    // Put current invoices first
+    for (const inv of currentInvoices) {
+      const key = (inv.invoiceNumber || inv.id).toLowerCase().trim();
+      map.set(key, inv);
+    }
+
+    // Merge incoming invoices (updating existing or appending new)
+    for (const incoming of validInvoices) {
+      const key = (incoming.invoiceNumber || incoming.id).toLowerCase().trim();
+      if (map.has(key)) {
+        map.set(key, { ...map.get(key)!, ...incoming, updatedAt: new Date().toISOString() });
+      } else {
+        map.set(key, incoming);
+      }
+    }
+
+    finalInvoices = Array.from(map.values());
+  }
+
+  // Persist to storage
+  saveInvoices(finalInvoices);
+
+  return {
+    success: true,
+    count: finalInvoices.length,
+    updatedInvoices: finalInvoices,
+  };
+}
+
