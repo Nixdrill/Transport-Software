@@ -512,6 +512,31 @@ export function resetMastersToDefaults(): AllMasters {
   return DEFAULT_MASTERS;
 }
 
+export function clearAllMasters(): AllMasters {
+  const emptyMasters: AllMasters = {
+    parties: [],
+    vehicles: [],
+    transporters: [],
+    routes: [],
+    drivers: [],
+    commodities: [],
+    lastUpdated: new Date().toISOString(),
+  };
+  saveMasters(emptyMasters);
+  return emptyMasters;
+}
+
+export function clearMasterCategory(category: keyof Omit<AllMasters, 'lastUpdated'>): AllMasters {
+  const current = getMasters();
+  const updated: AllMasters = {
+    ...current,
+    [category]: [],
+    lastUpdated: new Date().toISOString(),
+  };
+  saveMasters(updated);
+  return updated;
+}
+
 // ================= AUTO-FILL & LOOKUP AUTOMATIONS =================
 
 /**

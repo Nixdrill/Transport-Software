@@ -36,7 +36,9 @@ import {
   getMasters, 
   autoStoreDispatchIntoMasters, 
   restoreMasters, 
-  batchSyncDispatchesToMasters 
+  batchSyncDispatchesToMasters,
+  clearAllMasters,
+  resetMastersToDefaults
 } from './lib/mastersService';
 import { AllMasters } from './types/masters';
 
@@ -386,6 +388,40 @@ export default function App() {
     }
   };
 
+  const handleClearMastersData = () => {
+    clearAllMasters();
+    showNotification('All Master records (Parties, Vehicles, Transporters, Corridors) have been cleared.', 'info');
+  };
+
+  const handleResetMastersData = () => {
+    resetMastersToDefaults();
+    showNotification('Masters data reset to Indian Logistics default dataset.', 'success');
+  };
+
+  const handleBackupMastersOnly = () => {
+    const masters = getMasters();
+    const payload = {
+      app: 'LogiTrack Transport Masters',
+      version: '2.5',
+      exportedAt: new Date().toISOString(),
+      masters,
+    };
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `LogiTrack_Masters_Backup_${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    document.body.removeChild(downloadAnchor);
+    showNotification('Masters dataset backup exported to JSON.', 'success');
+  };
+
+  const handleDeleteAllWithMasters = async () => {
+    await handleDeleteAllData();
+    clearAllMasters();
+    showNotification('Total Factory Reset completed: All Dispatches and Master records purged.', 'info');
+  };
+
   const handleClearLocalCache = () => {
     localStorage.removeItem('logitrack_dispatches_v1');
     localStorage.removeItem('logitrack_sync_queue_v1');
@@ -595,8 +631,12 @@ export default function App() {
             activeTheme={activeTheme}
             onThemeChange={handleThemeChange}
             onBackupData={handleBackupData}
+            onBackupMastersOnly={handleBackupMastersOnly}
             onRestoreData={handleRestoreData}
             onDeleteAllData={handleDeleteAllData}
+            onClearMastersData={handleClearMastersData}
+            onResetMastersData={handleResetMastersData}
+            onDeleteAllWithMasters={handleDeleteAllWithMasters}
             onResetSampleData={handleLoadSampleData}
             onClearLocalCache={handleClearLocalCache}
             onImportExcel={handleImportExcelRecords}
