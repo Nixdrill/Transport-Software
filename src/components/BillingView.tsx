@@ -20,6 +20,9 @@ import {
   getStoredInvoiceCustomization, 
   saveStoredInvoiceCustomization 
 } from '../lib/invoiceCustomizationDefaults';
+import { 
+  recordInvoicePaymentWithReconciliation 
+} from '../lib/ledgerService';
 import { formatCurrency, generateSafeId } from '../lib/calculations';
 import { InvoicePrintModal } from './InvoicePrintModal';
 import { InvoiceBuilderModal } from './InvoiceBuilderModal';
@@ -51,7 +54,8 @@ import {
   Square,
   Palette,
   Sliders,
-  Upload
+  Upload,
+  RefreshCw
 } from 'lucide-react';
 
 interface BillingViewProps {
@@ -81,11 +85,17 @@ export const BillingView: React.FC<BillingViewProps> = ({
 
   // Payment Recording Modal
   const [paymentInvoice, setPaymentInvoice] = useState<FreightInvoice | null>(null);
+  const [paymentTypeOption, setPaymentTypeOption] = useState<'Full' | 'Partial' | 'Settlement / Excess Adjustment'>('Full');
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [paymentTdsOption, setPaymentTdsOption] = useState<'NONE' | '194C_1' | '194C_2' | 'CUSTOM'>('NONE');
+  const [paymentTdsAmount, setPaymentTdsAmount] = useState<number>(0);
+  const [paymentDeductionAmount, setPaymentDeductionAmount] = useState<number>(0);
+  const [paymentDeductionReason, setPaymentDeductionReason] = useState<string>('');
   const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('Bank Transfer / NEFT / RTGS');
   const [paymentRef, setPaymentRef] = useState<string>('');
   const [paymentNotes, setPaymentNotes] = useState<string>('');
+  const [paymentNextBillsAllocations, setPaymentNextBillsAllocations] = useState<Record<string, number>>({});
 
   // Biller Profile Settings Modal
   const [isBillerModalOpen, setIsBillerModalOpen] = useState(false);
@@ -215,51 +225,79 @@ export const BillingView: React.FC<BillingViewProps> = ({
   const handleOpenPaymentModal = (inv: FreightInvoice) => {
     setPaymentInvoice(inv);
     const remaining = Math.max(0, (inv.grandTotal || 0) - (inv.amountPaid || 0));
+    setPaymentTypeOption('Full');
     setPaymentAmount(remaining);
+    setPaymentTdsOption('NONE');
+    setPaymentTdsAmount(0);
+    setPaymentDeductionAmount(0);
+    setPaymentDeductionReason('');
     setPaymentDate(new Date().toISOString().split('T')[0]);
     setPaymentMode('Bank Transfer / NEFT / RTGS');
     setPaymentRef('');
     setPaymentNotes('');
+    setPaymentNextBillsAllocations({});
   };
 
-  // Submit Payment Record
+  // Submit Payment Record with Full / Partial and Settlement against Next Bill
   const handleRecordPaymentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!paymentInvoice) return;
 
-    const newPaymentRecord = {
-      id: generateSafeId('pmt'),
-      amount: paymentAmount,
-      paymentDate,
-      paymentMode,
-      referenceNumber: paymentRef.trim(),
-      notes: paymentNotes.trim(),
-      recordedAt: new Date().toISOString(),
-    };
+    const nextBillsArray = Object.entries(paymentNextBillsAllocations)
+      .filter(([_, amt]) => amt > 0)
+      .map(([invoiceId, allocatedAmount]) => ({ invoiceId, allocatedAmount }));
 
-    const newAmountPaid = (paymentInvoice.amountPaid || 0) + paymentAmount;
-    const newBalanceDue = Math.max(0, paymentInvoice.grandTotal - newAmountPaid);
-    
-    let newStatus: PaymentStatus = 'Partially Paid';
-    if (newBalanceDue === 0 || newAmountPaid >= paymentInvoice.grandTotal) {
-      newStatus = 'Paid';
-    } else if (newAmountPaid === 0) {
-      newStatus = 'Unpaid';
+    try {
+      const result = recordInvoicePaymentWithReconciliation({
+        invoiceId: paymentInvoice.id,
+        paymentType: paymentTypeOption,
+        bankReceivedAmount: paymentAmount,
+        tdsDeducted: paymentTdsAmount,
+        tdsSection: paymentTdsOption === '194C_1' ? '194C (1%)' : paymentTdsOption === '194C_2' ? '194C (2%)' : '194C',
+        deductionAmount: paymentDeductionAmount,
+        deductionReason: paymentDeductionReason,
+        paymentDate,
+        paymentMode,
+        referenceNumber: paymentRef.trim(),
+        notes: paymentNotes.trim(),
+        nextBillsSettlement: nextBillsArray.length > 0 ? nextBillsArray : undefined,
+      });
+
+      refreshInvoices();
+      setPaymentInvoice(null);
+      
+      const msg = result.settledInvoices.length > 0
+        ? `Payment recorded! Reconciled and settled ${result.settledInvoices.length} next pending bill(s) for ${paymentInvoice.billedTo.partyName}.`
+        : `Payment of ${formatCurrency(result.totalCreditApplied)} recorded for ${paymentInvoice.invoiceNumber}! Status: ${result.primaryInvoice.paymentStatus}`;
+
+      showNotification(msg, 'success');
+    } catch (err: any) {
+      showNotification(err.message || 'Failed to record payment.', 'error');
     }
+  };
 
-    const updatedInv: FreightInvoice = {
-      ...paymentInvoice,
-      amountPaid: newAmountPaid,
-      balanceDue: newBalanceDue,
-      paymentStatus: newStatus,
-      payments: [...(paymentInvoice.payments || []), newPaymentRecord],
-      updatedAt: new Date().toISOString(),
-    };
+  // Delete / Void a specific payment installment on an invoice
+  const handleVoidPaymentRecord = (invoiceId: string, paymentRecordId: string) => {
+    if (!confirm('Are you sure you want to void / delete this payment installment?')) return;
+    const all = getInvoices();
+    const invIdx = all.findIndex((i) => i.id === invoiceId);
+    if (invIdx === -1) return;
 
-    saveInvoice(updatedInv);
+    const inv = { ...all[invIdx] };
+    const pmt = inv.payments?.find((p) => p.id === paymentRecordId);
+    if (!pmt) return;
+
+    inv.payments = inv.payments?.filter((p) => p.id !== paymentRecordId) || [];
+    const totalCreditsRemaining = inv.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    inv.amountPaid = totalCreditsRemaining;
+    inv.balanceDue = Math.max(0, inv.grandTotal - inv.amountPaid);
+    inv.paymentStatus = inv.balanceDue === 0 ? 'Paid' : inv.amountPaid > 0 ? 'Partially Paid' : 'Unpaid';
+    inv.updatedAt = new Date().toISOString();
+
+    saveInvoice(inv);
     refreshInvoices();
-    setPaymentInvoice(null);
-    showNotification(`Payment of ${formatCurrency(paymentAmount)} recorded for ${paymentInvoice.invoiceNumber}! Status: ${newStatus}`, 'success');
+    setPaymentInvoice(inv);
+    showNotification('Payment installment removed and ledger recalculated.', 'info');
   };
 
   // Save Biller Company Info
@@ -1233,18 +1271,23 @@ export const BillingView: React.FC<BillingViewProps> = ({
         }}
       />
 
-      {/* RECORD PAYMENT MODAL */}
+      {/* RECORD PAYMENT & RECONCILIATION MODAL */}
       {paymentInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
-          <div className="bg-white border border-slate-300 w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-300 w-full max-w-2xl rounded-2xl shadow-2xl p-6 space-y-4 max-h-[94vh] flex flex-col my-4">
             <div className="flex items-center justify-between border-b pb-3">
               <div className="flex items-center space-x-2">
                 <span className="p-1.5 rounded-lg bg-emerald-100 text-emerald-800">
                   <CreditCard className="h-5 w-5" />
                 </span>
-                <h4 className="font-black text-slate-950 text-sm">
-                  Record Payment: {paymentInvoice.invoiceNumber}
-                </h4>
+                <div>
+                  <h4 className="font-black text-slate-950 text-base">
+                    Record Payment: {paymentInvoice.invoiceNumber}
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Full / Partial payment, TDS deduction u/s 194C, and next-bill reconciliation.
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setPaymentInvoice(null)}
@@ -1254,106 +1297,407 @@ export const BillingView: React.FC<BillingViewProps> = ({
               </button>
             </div>
 
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Party:</span>
-                <strong className="text-slate-900">{paymentInvoice.billedTo.partyName}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Invoice Total:</span>
-                <span className="font-mono font-bold text-slate-900">{formatCurrency(paymentInvoice.grandTotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Already Paid:</span>
-                <span className="font-mono text-emerald-700 font-bold">{formatCurrency(paymentInvoice.amountPaid || 0)}</span>
-              </div>
-              <div className="flex justify-between border-t border-slate-200 pt-1 font-bold">
-                <span className="text-slate-900">Current Balance Due:</span>
-                <span className="font-mono text-rose-700 font-black">
-                  {formatCurrency(Math.max(0, paymentInvoice.grandTotal - (paymentInvoice.amountPaid || 0)))}
-                </span>
-              </div>
-            </div>
-
-            <form onSubmit={handleRecordPaymentSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Amount Received (₹) *</label>
-                <input
-                  type="number"
-                  step="1"
-                  min="1"
-                  required
-                  value={paymentAmount || ''}
-                  onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono text-sm font-black text-slate-950 focus:ring-2 focus:ring-[#00E676]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+            <div className="overflow-y-auto pr-1 space-y-4 text-xs">
+              {/* Invoice Summary Card */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Payment Date *</label>
-                  <input
-                    type="date"
-                    required
-                    value={paymentDate}
-                    onChange={(e) => setPaymentDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono font-semibold"
-                  />
+                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Party Name</span>
+                  <strong className="text-slate-900 line-clamp-1">{paymentInvoice.billedTo.partyName}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Invoice Grand Total</span>
+                  <span className="font-mono font-bold text-slate-900">{formatCurrency(paymentInvoice.grandTotal)}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Already Credited</span>
+                  <span className="font-mono text-emerald-700 font-bold">{formatCurrency(paymentInvoice.amountPaid || 0)}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Current Balance Due</span>
+                  <span className="font-mono text-rose-700 font-black text-sm">
+                    {formatCurrency(Math.max(0, paymentInvoice.grandTotal - (paymentInvoice.amountPaid || 0)))}
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleRecordPaymentSubmit} className="space-y-4">
+                {/* Full vs Partial vs Excess Settlement Selector */}
+                <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl space-y-2">
+                  <span className="font-black text-emerald-950 block text-[11px] uppercase tracking-wider">
+                    Payment Type:
+                  </span>
+                  <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentTypeOption('Full');
+                        const due = Math.max(0, paymentInvoice.grandTotal - (paymentInvoice.amountPaid || 0));
+                        setPaymentAmount(due);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                        paymentTypeOption === 'Full'
+                          ? 'bg-emerald-700 text-white shadow-2xs'
+                          : 'bg-white text-slate-700 border border-emerald-300 hover:bg-emerald-100/50'
+                      }`}
+                    >
+                      Full Payment ({formatCurrency(Math.max(0, paymentInvoice.grandTotal - (paymentInvoice.amountPaid || 0)))})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentTypeOption('Partial')}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                        paymentTypeOption === 'Partial'
+                          ? 'bg-emerald-700 text-white shadow-2xs'
+                          : 'bg-white text-slate-700 border border-emerald-300 hover:bg-emerald-100/50'
+                      }`}
+                    >
+                      Partial Payment
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentTypeOption('Settlement / Excess Adjustment')}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                        paymentTypeOption === 'Settlement / Excess Adjustment'
+                          ? 'bg-purple-700 text-white shadow-2xs'
+                          : 'bg-white text-slate-700 border border-purple-300 hover:bg-purple-50'
+                      }`}
+                    >
+                      Excess / Settle Next Bills
+                    </button>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Payment Mode *</label>
-                  <select
-                    value={paymentMode}
-                    onChange={(e) => setPaymentMode(e.target.value as PaymentMode)}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold"
+                {/* Amount Received, Date & Mode */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Bank / Cash Received (₹) *</label>
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      required
+                      value={paymentAmount || ''}
+                      onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono text-sm font-black text-slate-950 focus:ring-2 focus:ring-[#00E676]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Payment Date *</label>
+                    <input
+                      type="date"
+                      required
+                      value={paymentDate}
+                      onChange={(e) => setPaymentDate(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono font-semibold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Payment Mode *</label>
+                    <select
+                      value={paymentMode}
+                      onChange={(e) => setPaymentMode(e.target.value as PaymentMode)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold"
+                    >
+                      <option value="Bank Transfer / NEFT / RTGS">Bank Transfer (NEFT/RTGS)</option>
+                      <option value="Cheque">Cheque</option>
+                      <option value="UPI">UPI / Digital</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Settlement / Bill Reconciliation">Bill Reconciliation Credit</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* TDS Calculator Section */}
+                <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="font-bold text-amber-950 text-[11px] uppercase tracking-wider">
+                      TDS Deduction u/s 194C (Goods Transport Agency):
+                    </span>
+                    <div className="flex items-center space-x-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPaymentTdsOption('NONE');
+                          setPaymentTdsAmount(0);
+                        }}
+                        className={`px-2 py-1 rounded text-[10px] font-bold ${
+                          paymentTdsOption === 'NONE' ? 'bg-amber-700 text-white' : 'bg-white text-slate-700 border border-amber-300'
+                        }`}
+                      >
+                        No TDS
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPaymentTdsOption('194C_1');
+                          // 1% on taxable freight or grand total
+                          const calc = Math.round((paymentInvoice.taxableAmount || paymentInvoice.grandTotal) * 0.01);
+                          setPaymentTdsAmount(calc);
+                        }}
+                        className={`px-2 py-1 rounded text-[10px] font-bold ${
+                          paymentTdsOption === '194C_1' ? 'bg-amber-700 text-white' : 'bg-white text-slate-700 border border-amber-300'
+                        }`}
+                      >
+                        1% (Individual/HUF)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPaymentTdsOption('194C_2');
+                          // 2% on taxable freight or grand total
+                          const calc = Math.round((paymentInvoice.taxableAmount || paymentInvoice.grandTotal) * 0.02);
+                          setPaymentTdsAmount(calc);
+                        }}
+                        className={`px-2 py-1 rounded text-[10px] font-bold ${
+                          paymentTdsOption === '194C_2' ? 'bg-amber-700 text-white' : 'bg-white text-slate-700 border border-amber-300'
+                        }`}
+                      >
+                        2% (Company/Firm)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentTdsOption('CUSTOM')}
+                        className={`px-2 py-1 rounded text-[10px] font-bold ${
+                          paymentTdsOption === 'CUSTOM' ? 'bg-amber-700 text-white' : 'bg-white text-slate-700 border border-amber-300'
+                        }`}
+                      >
+                        Custom ₹
+                      </button>
+                    </div>
+                  </div>
+
+                  {paymentTdsOption !== 'NONE' && (
+                    <div className="flex items-center space-x-3 pt-1">
+                      <div className="flex-1">
+                        <label className="block text-[10px] font-bold text-amber-900 mb-0.5">TDS Amount Credited (₹):</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={paymentTdsAmount || ''}
+                          onChange={(e) => setPaymentTdsAmount(parseFloat(e.target.value) || 0)}
+                          className="w-full px-2.5 py-1 bg-white border border-amber-300 rounded-lg font-mono font-bold text-amber-950"
+                        />
+                      </div>
+                      <span className="text-[10px] text-amber-800 self-end pb-1.5">
+                        TDS Certificate is credited against invoice total.
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Deductions / Shortage / Rebate */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Deduction / Rebate / Shortage (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={paymentDeductionAmount || ''}
+                      onChange={(e) => setPaymentDeductionAmount(parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Deduction Reason</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Shortage weight penalty / Detention deduction"
+                      value={paymentDeductionReason}
+                      onChange={(e) => setPaymentDeductionReason(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                {/* Ref & Notes */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Reference / UTR / Cheque No.</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. UTR-HDFC-99182348"
+                      value={paymentRef}
+                      onChange={(e) => setPaymentRef(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Payment Notes</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Settled after TDS deduction"
+                      value={paymentNotes}
+                      onChange={(e) => setPaymentNotes(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                {/* Real-time Calculation Summary Banner */}
+                {(() => {
+                  const currentBal = Math.max(0, paymentInvoice.grandTotal - (paymentInvoice.amountPaid || 0));
+                  const totalCredit = (paymentAmount || 0) + (paymentTdsAmount || 0) + (paymentDeductionAmount || 0);
+                  const appliedToThis = Math.min(currentBal, totalCredit);
+                  const excess = Math.max(0, totalCredit - currentBal);
+                  const remainingDue = Math.max(0, currentBal - appliedToThis);
+
+                  // Other pending bills for same party
+                  const otherPendingBills = invoices.filter((i) => {
+                    const isSameParty = (i.billedTo?.partyName || '').toLowerCase() === (paymentInvoice.billedTo?.partyName || '').toLowerCase();
+                    const isNotThis = i.id !== paymentInvoice.id;
+                    const hasDue = (i.balanceDue || (i.grandTotal - (i.amountPaid || 0))) > 0;
+                    return isSameParty && isNotThis && hasDue;
+                  });
+
+                  return (
+                    <div className="space-y-3">
+                      <div className="p-3 bg-slate-900 text-white rounded-xl flex items-center justify-between text-xs flex-wrap gap-2">
+                        <div>
+                          <span className="text-slate-400 block text-[10px] uppercase">Total Credit Generated</span>
+                          <span className="font-mono font-black text-sm text-[#00E676]">
+                            ₹{totalCredit.toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[10px] uppercase">Applied to this Bill</span>
+                          <span className="font-mono font-bold text-white">
+                            ₹{appliedToThis.toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[10px] uppercase">Remaining Due on Bill</span>
+                          <span className={`font-mono font-bold ${remainingDue === 0 ? 'text-[#00E676]' : 'text-amber-400'}`}>
+                            {remainingDue === 0 ? '✓ Paid in Full' : `₹${remainingDue.toLocaleString('en-IN')}`}
+                          </span>
+                        </div>
+                        {excess > 0 && (
+                          <div className="bg-purple-900/80 px-2.5 py-1 rounded-lg border border-purple-400">
+                            <span className="text-purple-200 block text-[9px] uppercase font-black">Excess Credit</span>
+                            <span className="font-mono font-black text-xs text-purple-300">
+                              ₹{excess.toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Next Bills Settlement Drawer (If excess or user wants to allocate) */}
+                      {otherPendingBills.length > 0 && (excess > 0 || paymentTypeOption === 'Settlement / Excess Adjustment') && (
+                        <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-1.5">
+                              <RefreshCw className="h-4 w-4 text-purple-700" />
+                              <span className="font-bold text-purple-950 text-xs">
+                                Settle Excess against Next Pending Bills for {paymentInvoice.billedTo.partyName}:
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-purple-700">
+                              {otherPendingBills.length} other pending bill(s)
+                            </span>
+                          </div>
+
+                          <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                            {otherPendingBills.map((nextInv) => {
+                              const nextBal = nextInv.balanceDue || (nextInv.grandTotal - (nextInv.amountPaid || 0));
+                              const currentAlloc = paymentNextBillsAllocations[nextInv.id] || 0;
+
+                              return (
+                                <div key={nextInv.id} className="flex items-center justify-between bg-white p-2 rounded-lg border border-purple-200 text-xs">
+                                  <div>
+                                    <span className="font-mono font-bold text-slate-900">{nextInv.invoiceNumber}</span>
+                                    <span className="text-[10px] text-slate-500 ml-2">({nextInv.invoiceDate})</span>
+                                    <span className="text-[10px] text-rose-700 font-bold ml-2">Due: ₹{nextBal.toLocaleString('en-IN')}</span>
+                                  </div>
+                                  <div className="flex items-center space-x-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const fillAmt = Math.min(nextBal, excess);
+                                        setPaymentNextBillsAllocations({ ...paymentNextBillsAllocations, [nextInv.id]: fillAmt });
+                                      }}
+                                      className="px-2 py-0.5 bg-purple-100 hover:bg-purple-200 text-purple-900 rounded text-[10px] font-bold"
+                                    >
+                                      Apply
+                                    </button>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max={nextBal}
+                                      value={currentAlloc || ''}
+                                      onChange={(e) => {
+                                        const val = Math.min(nextBal, parseFloat(e.target.value) || 0);
+                                        setPaymentNextBillsAllocations({ ...paymentNextBillsAllocations, [nextInv.id]: val });
+                                      }}
+                                      placeholder="₹ Allocate"
+                                      className="w-24 px-2 py-1 text-right bg-white border border-slate-300 rounded font-mono font-bold text-slate-900"
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Existing Payment Installments History for this invoice */}
+                {Array.isArray(paymentInvoice.payments) && paymentInvoice.payments.length > 0 && (
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="bg-slate-100 px-3 py-1.5 font-bold text-[11px] text-slate-700 flex justify-between">
+                      <span>Recorded Payment History ({paymentInvoice.payments.length} installments)</span>
+                      <span>Total: ₹{(paymentInvoice.amountPaid || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="divide-y divide-slate-100 max-h-32 overflow-y-auto">
+                      {paymentInvoice.payments.map((p) => (
+                        <div key={p.id} className="p-2 flex items-center justify-between text-xs bg-white hover:bg-slate-50">
+                          <div>
+                            <span className="font-mono text-slate-600 font-medium">{p.paymentDate}</span>
+                            <span className="mx-1.5 text-slate-300">•</span>
+                            <span className="font-bold text-slate-900">{p.paymentMode}</span>
+                            {p.referenceNumber && <span className="font-mono text-slate-500 ml-1.5">({p.referenceNumber})</span>}
+                            {p.tdsDeducted ? <span className="text-amber-700 font-bold ml-1.5">TDS: ₹{p.tdsDeducted}</span> : null}
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="font-mono font-black text-emerald-700">₹{p.amount.toLocaleString('en-IN')}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleVoidPaymentRecord(paymentInvoice.id, p.id)}
+                              className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                              title="Void payment"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Form Buttons */}
+                <div className="pt-2 flex justify-end space-x-2 border-t">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentInvoice(null)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
                   >
-                    <option value="Bank Transfer / NEFT / RTGS">Bank Transfer (NEFT/RTGS)</option>
-                    <option value="Cheque">Cheque</option>
-                    <option value="UPI">UPI / Digital</option>
-                    <option value="Cash">Cash</option>
-                  </select>
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-[#00E676] hover:bg-[#00c864] text-slate-950 font-black rounded-xl shadow-xs flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Save Payment & Update Ledgers</span>
+                  </button>
                 </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Reference / UTR / Cheque No.</label>
-                <input
-                  type="text"
-                  placeholder="e.g. UTR-HDFC-99182348"
-                  value={paymentRef}
-                  onChange={(e) => setPaymentRef(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Payment Notes</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Settled after TDS deduction"
-                  value={paymentNotes}
-                  onChange={(e) => setPaymentNotes(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl"
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setPaymentInvoice(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-[#00E676] hover:bg-[#00c864] text-slate-950 font-black rounded-xl shadow-xs"
-                >
-                  Save Payment
-                </button>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
         </div>
       )}

@@ -28,6 +28,7 @@ import { LRLookupModal } from './components/LRLookupModal';
 import { DashboardView } from './components/DashboardView';
 import { MastersView } from './components/MastersView';
 import { BillingView } from './components/BillingView';
+import { MisAndLedgersView } from './components/MisAndLedgersView';
 import { SettingsView } from './components/SettingsView';
 import { PrintDispatchModal } from './components/PrintDispatchModal';
 import { InvoiceBuilderModal } from './components/InvoiceBuilderModal';
@@ -37,6 +38,7 @@ import { CheckCircle2, AlertCircle, RefreshCw, X, Sparkles } from 'lucide-react'
 import { generateSafeId } from './lib/calculations';
 import { 
   getMasters, 
+  saveMasters,
   autoStoreDispatchIntoMasters, 
   restoreMasters, 
   batchSyncDispatchesToMasters,
@@ -62,7 +64,7 @@ export default function App() {
   const [activeTheme, setActiveTheme] = useState<string>(getSavedTheme());
   
   // Navigation & View
-  const [activeTab, setActiveTab] = useState<'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'billing' | 'settings'>('list');
+  const [activeTab, setActiveTab] = useState<'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'billing' | 'mis_ledgers' | 'settings'>('list');
   const [records, setRecords] = useState<DispatchRecord[]>([]);
   const [editingRecord, setEditingRecord] = useState<DispatchRecord | null>(null);
   const [printRecord, setPrintRecord] = useState<DispatchRecord | null>(null);
@@ -122,19 +124,60 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Load records from local storage or seed initial sample
+  // 2. Load records from local storage and ensure all sample entries are cleaned
   useEffect(() => {
-    const local = getLocalDispatches();
-    if (local.length > 0) {
-      setRecords(local);
-    } else {
-      const samples = getSampleDispatches();
-      saveLocalDispatches(samples);
-      setRecords(samples);
+    // Clean sample dispatches from storage if present
+    const rawDispatches = getLocalDispatches();
+    const cleanDispatches = rawDispatches.filter(
+      (d) => !d.id.startsWith('dsp_sample') && d.ownerId !== 'sample-user'
+    );
+    if (cleanDispatches.length !== rawDispatches.length) {
+      saveLocalDispatches(cleanDispatches);
+    }
+    setRecords(cleanDispatches);
+
+    // Clean sample invoices from storage if present
+    const rawInvoices = getInvoices();
+    const cleanInvoices = rawInvoices.filter(
+      (inv) => !inv.id.startsWith('inv-sample') && inv.invoiceNumber !== 'INV/2026-27/001' && inv.invoiceNumber !== 'INV/2026-27/002'
+    );
+    if (cleanInvoices.length !== rawInvoices.length) {
+      saveInvoices(cleanInvoices);
     }
 
-    // Auto-sync initial dispatches to masters on first load
-    batchSyncDispatchesToMasters(local.length > 0 ? local : getSampleDispatches());
+    // Clean sample masters if legacy default sample masters were loaded
+    const rawMasters = getMasters();
+    const samplePartyIds = new Set(['pty-0', 'pty-0b', 'pty-1', 'pty-2', 'pty-3', 'pty-4', 'pty-5']);
+    const cleanParties = rawMasters.parties.filter((p) => !samplePartyIds.has(p.id));
+    const sampleVehIds = new Set(['veh-1', 'veh-2', 'veh-3', 'veh-4', 'veh-5']);
+    const cleanVehicles = rawMasters.vehicles.filter((v) => !sampleVehIds.has(v.id));
+    const sampleTrnIds = new Set(['trn-1', 'trn-2', 'trn-3', 'trn-4']);
+    const cleanTransporters = rawMasters.transporters.filter((t) => !sampleTrnIds.has(t.id));
+    const sampleRtIds = new Set(['rt-1', 'rt-2', 'rt-3', 'rt-4']);
+    const cleanRoutes = rawMasters.routes.filter((r) => !sampleRtIds.has(r.id));
+    const sampleDrvIds = new Set(['drv-1', 'drv-2', 'drv-3', 'drv-4']);
+    const cleanDrivers = rawMasters.drivers.filter((d) => !sampleDrvIds.has(d.id));
+    const sampleCmdIds = new Set(['cmd-1', 'cmd-2', 'cmd-3', 'cmd-4']);
+    const cleanCommodities = rawMasters.commodities.filter((c) => !sampleCmdIds.has(c.id));
+
+    if (
+      cleanParties.length !== rawMasters.parties.length ||
+      cleanVehicles.length !== rawMasters.vehicles.length ||
+      cleanTransporters.length !== rawMasters.transporters.length ||
+      cleanRoutes.length !== rawMasters.routes.length ||
+      cleanDrivers.length !== rawMasters.drivers.length ||
+      cleanCommodities.length !== rawMasters.commodities.length
+    ) {
+      saveMasters({
+        parties: cleanParties,
+        vehicles: cleanVehicles,
+        transporters: cleanTransporters,
+        routes: cleanRoutes,
+        drivers: cleanDrivers,
+        commodities: cleanCommodities,
+        lastUpdated: new Date().toISOString(),
+      });
+    }
 
     // Update pending queue count
     updatePendingCount();
@@ -670,7 +713,16 @@ export default function App() {
           />
         )}
 
-        {/* TAB 7: Settings, Data Backup, Restore, Delete & Theme Picker */}
+        {/* TAB 7: MIS, Ledgers, Statement of Accounts & Multi-Bill Reconciliation */}
+        {activeTab === 'mis_ledgers' && (
+          <MisAndLedgersView
+            onOpenInvoicePrint={(inv) => setQuickPrintInvoice(inv)}
+            onNavigateToBilling={() => setActiveTab('billing')}
+            showNotification={showNotification}
+          />
+        )}
+
+        {/* TAB 8: Settings, Data Backup, Restore, Delete & Theme Picker */}
         {activeTab === 'settings' && (
           <SettingsView
             records={records}

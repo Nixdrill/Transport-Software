@@ -25,8 +25,8 @@ import { User } from 'firebase/auth';
 import { AppUser } from '../lib/authService';
 
 interface HeaderProps {
-  activeTab: 'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'billing' | 'settings';
-  setActiveTab: (tab: 'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'billing' | 'settings') => void;
+  activeTab: 'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'billing' | 'mis_ledgers' | 'settings';
+  setActiveTab: (tab: 'form' | 'list' | 'lookup' | 'dashboard' | 'masters' | 'billing' | 'mis_ledgers' | 'settings') => void;
   isOnline: boolean;
   isSyncing: boolean;
   pendingCount: number;
@@ -254,6 +254,18 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Receipt className="h-4 w-4 text-emerald-600" />
               <span>Invoices & Billing</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('mis_ledgers')}
+              className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-black transition-all ${
+                activeTab === 'mis_ledgers'
+                  ? 'bg-white text-slate-950 shadow-xs border border-slate-300'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
+            >
+              <BarChart3 className="h-4 w-4 text-indigo-700" />
+              <span>MIS & Ledgers</span>
             </button>
 
             <button

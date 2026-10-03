@@ -1,10 +1,16 @@
 export type InvoiceType = 'Tax Invoice' | 'Freight Bill' | 'GTA Consignment Note' | 'Transporter Settlement Bill';
 
-export type PaymentStatus = 'Unpaid' | 'Partially Paid' | 'Paid' | 'Overdue';
+export type PaymentStatus = 'Unpaid' | 'Partially Paid' | 'Paid' | 'Overdue' | 'Adjusted / Reconciled' | 'Excess Paid';
 
 export type TaxType = 'IGST' | 'CGST_SGST' | 'NONE';
 
-export type PaymentMode = 'Bank Transfer / NEFT / RTGS' | 'Cheque' | 'Cash' | 'UPI';
+export type PaymentMode = 
+  | 'Bank Transfer / NEFT / RTGS' 
+  | 'Cheque' 
+  | 'Cash' 
+  | 'UPI'
+  | 'Settlement / Bill Reconciliation'
+  | 'Credit Note / Adjustment';
 
 export interface InvoicePartyInfo {
   partyName: string;
@@ -65,12 +71,24 @@ export interface InvoiceLineItem {
   sacCode?: string; // 996511 for Goods Transport
 }
 
+export type PaymentTypeOption = 'Full' | 'Partial' | 'Settlement / Excess Adjustment';
+
 export interface InvoicePaymentRecord {
   id: string;
-  amount: number;
+  amount: number; // Gross amount credited towards this invoice
+  bankReceivedAmount?: number; // Actual money received in bank / cash
   paymentDate: string;
   paymentMode: PaymentMode;
   referenceNumber?: string; // Cheque No / UTR / Transaction ID
+  tdsDeducted?: number; // TDS u/s 194C (1% or 2%)
+  tdsSection?: string; // e.g. "194C (1%)" or "194C (2%)"
+  deductionAmount?: number; // Shortage / damage / rebate / detention penalty
+  deductionReason?: string;
+  paymentType?: PaymentTypeOption;
+  settledAgainstInvoiceId?: string; // Target invoice where excess was adjusted
+  settledAgainstInvoiceNo?: string;
+  sourceSettlementInvoiceId?: string; // Source invoice from which adjustment came
+  sourceSettlementInvoiceNo?: string;
   notes?: string;
   recordedAt: string;
 }
